@@ -68,6 +68,9 @@ export interface PracticeHistoryEntry {
   practicedAt: string;
   durationSeconds?: number;
   weakMeasures?: WeakMeasureSummary[];
+  revision?: number;
+  updatedAt?: string;
+  deletedAt?: string | null;
 }
 
 export interface PracticeBookmark {

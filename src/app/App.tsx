@@ -1,5 +1,5 @@
 /* MARKER-MAKE-KIT-INVOKED */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { HomePage } from './components/HomePage';
 import { PrepPage } from './components/PrepPage';
 import { PracticePage } from './components/PracticePage';
@@ -11,6 +11,7 @@ import { SONGS } from './data';
 import type { AuthUser, GameResults, PracticeBookmark, PracticeHistoryEntry, PracticeSettings, Song } from './types';
 import { deleteLocalAccount, getLocalUserExport, loadSessionUser, logoutLocalAccount, updateLocalUser } from './auth/authStore';
 import { summarizeWeakMeasures } from './practice/practiceInsights';
+import { deleteCloudAccount, isCloudMode, logoutCloudAccount, refreshCloudSession, syncCloudHistory, updateCloudUser } from './cloud/cloudClient';
 
 const GUEST_HISTORY_KEY = 'harmonica-practice-history';
 const GUEST_MODE_KEY = 'harmonica-guest-mode';
@@ -102,14 +103,14 @@ function StatusBar() {
 }
 
 export default function App() {
-  const [user, setUser] = useState<AuthUser | null>(loadSessionUser);
+  const [user, setUser] = useState<AuthUser | null>(() => isCloudMode() ? null : loadSessionUser());
   const [guestMode, setGuestMode] = useState(() => window.localStorage.getItem(GUEST_MODE_KEY) === 'true');
   const [page, setPage] = useState<Page>('home');
   const [selectedSong, setSelectedSong] = useState<Song>(SONGS[0]);
   const [results, setResults] = useState<GameResults | null>(null);
   const [settings, setSettings] = useState<PracticeSettings>(DEFAULT_SETTINGS);
-  const [history, setHistory] = useState<PracticeHistoryEntry[]>(() => loadHistory(loadSessionUser()?.id));
-  const [bookmarks, setBookmarks] = useState<PracticeBookmark[]>(() => loadBookmarks(loadSessionUser()?.id));
+  const [history, setHistory] = useState<PracticeHistoryEntry[]>(() => loadHistory(isCloudMode() ? undefined : loadSessionUser()?.id));
+  const [bookmarks, setBookmarks] = useState<PracticeBookmark[]>(() => loadBookmarks(isCloudMode() ? undefined : loadSessionUser()?.id));
 
   const activateGuest = () => {
     window.localStorage.setItem(GUEST_MODE_KEY, 'true');
@@ -132,24 +133,50 @@ export default function App() {
     setHistory(migrated);
     setBookmarks(migratedBookmarks);
     setPage('home');
+    if (isCloudMode()) {
+      void syncCloudHistory(migrated).then((synced) => {
+        saveHistory(synced, nextUser.id);
+        setHistory(synced);
+      }).catch(() => {
+        // Keep the local cache usable while the cloud is temporarily unavailable.
+      });
+    }
   };
+
+  useEffect(() => {
+    if (!isCloudMode() || user || guestMode) return;
+    void refreshCloudSession().then((restored) => {
+      if (restored) authenticate(restored);
+    });
+  }, [guestMode, user]);
 
   const finishPractice = (nextResults: GameResults) => {
     setResults(nextResults);
     setHistory((current) => {
+      const now = new Date().toISOString();
       const next = [{
         id: `${Date.now()}-${selectedSong.id}`,
         songId: selectedSong.id,
         score: nextResults.score,
         accuracy: nextResults.accuracy,
-        practicedAt: new Date().toISOString(),
+        practicedAt: now,
         durationSeconds: nextResults.durationSeconds,
         weakMeasures: summarizeWeakMeasures(nextResults.noteResults ?? []).slice(0, 3),
+        revision: 0,
+        updatedAt: now,
       }, ...current].slice(0, 20);
       try {
         saveHistory(next, user?.id);
       } catch {
         // The practice result still works when storage is unavailable.
+      }
+      if (user && isCloudMode()) {
+        void syncCloudHistory(next).then((synced) => {
+          saveHistory(synced, user.id);
+          setHistory(synced);
+        }).catch(() => {
+          // The unsynced local entry will retry at the next authenticated session.
+        });
       }
       return next;
     });
@@ -157,7 +184,8 @@ export default function App() {
   };
 
   const logout = () => {
-    logoutLocalAccount();
+    if (isCloudMode()) void logoutCloudAccount();
+    else logoutLocalAccount();
     window.localStorage.removeItem(GUEST_MODE_KEY);
     setUser(null);
     setGuestMode(false);
@@ -167,12 +195,17 @@ export default function App() {
   };
 
   const saveUser = (nextUser: AuthUser) => {
-    setUser(updateLocalUser(nextUser));
+    if (isCloudMode()) {
+      void updateCloudUser(nextUser).then(setUser);
+    } else {
+      setUser(updateLocalUser(nextUser));
+    }
   };
 
   const deleteAccount = () => {
     if (!user) return;
-    deleteLocalAccount(user.id);
+    if (isCloudMode()) void deleteCloudAccount();
+    else deleteLocalAccount(user.id);
     window.localStorage.removeItem(historyKey(user.id));
     window.localStorage.removeItem(bookmarksKey(user.id));
     setUser(null);
