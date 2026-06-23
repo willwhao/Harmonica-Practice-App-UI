@@ -23,6 +23,9 @@ export interface GameResults {
   total: number;
   durationSeconds?: number;
   noteResults?: NotePracticeResult[];
+  recordingUrl?: string;
+  recordingDurationMs?: number;
+  errorSegments?: PracticeErrorSegment[];
 }
 
 export type NoteJudgment = 'Perfect' | 'Great' | 'Good' | 'Bad' | 'Miss';
@@ -41,6 +44,14 @@ export interface NotePracticeResult {
   stabilityCents: number | null;
 }
 
+export interface PracticeErrorSegment {
+  id: string;
+  label: string;
+  startMs: number;
+  endMs: number;
+  reason: string;
+}
+
 export interface WeakMeasureSummary {
   measure: number;
   errors: number;
@@ -53,6 +64,9 @@ export interface PracticeSettings {
   harmonicaType: 'diatonic' | 'chromatic';
   scoreMode: 'dynamic' | 'traditional';
   speed: number;
+  accompanimentVolume: number;
+  metronomeVolume: number;
+  demoVolume: number;
   practiceRange: 'full' | 'firstHalf' | 'secondHalf' | 'custom';
   customStartMeasure: number;
   customEndMeasure: number;

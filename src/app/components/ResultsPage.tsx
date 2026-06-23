@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { AlertTriangle, BookmarkPlus, Share2, RotateCcw, Home, CheckCircle } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { AlertTriangle, BookmarkPlus, Share2, RotateCcw, Home, CheckCircle, PlayCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { GameResults, Song } from '../types';
 import { getWeakestMeasure, summarizeTimingAndStability } from '../practice/practiceInsights';
@@ -55,12 +55,19 @@ const JUDGMENT_LABEL: Record<string, { label: string; color: string }> = {
 
 export function ResultsPage({ results, song, onBookmarkWeakMeasure, onRetry, onHome }: Props) {
   const [shareStatus, setShareStatus] = useState('');
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const rank = getRank(results.score, results.accuracy);
   const totalHit = results.perfect + results.great + results.good;
   const completionPct = Math.round((totalHit / results.total) * 100);
   const weakestMeasure = getWeakestMeasure(results.noteResults ?? []);
   const errorNotes = (results.noteResults ?? []).filter((item) => item.judgment === 'Bad' || item.judgment === 'Miss').slice(0, 8);
   const performanceDimensions = summarizeTimingAndStability(results.noteResults ?? []);
+  const seekRecording = (startMs: number) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = startMs / 1000;
+    void audio.play();
+  };
   const shareResult = async () => {
     const text = `我在《${song.title}》口琴练习中获得 ${results.score.toLocaleString()} 分，准确率 ${results.accuracy}%！`;
     try {
@@ -229,6 +236,54 @@ export function ResultsPage({ results, song, onBookmarkWeakMeasure, onRetry, onH
           ))}
         </div>
       </div>
+
+      {results.recordingUrl && (
+        <div style={{ padding: '6px 20px 14px', flexShrink: 0 }}>
+          <div style={{ color: '#6B80A8', fontSize: 12, marginBottom: 10 }}>录音回放与错音定位</div>
+          <div style={{ border: '1px solid rgba(0,201,177,0.16)', background: 'rgba(0,201,177,0.055)', borderRadius: 14, padding: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
+              <div>
+                <div style={{ color: '#D8FFF8', fontSize: 12, fontWeight: 750 }}>本次练习录音</div>
+                <div style={{ color: '#6B80A8', fontSize: 10, marginTop: 2 }}>
+                  {results.recordingDurationMs ? `${Math.round(results.recordingDurationMs / 1000)} 秒` : '临时回放'} · 仅保存在当前页面
+                </div>
+              </div>
+              <PlayCircle size={22} color="#00C9B1" />
+            </div>
+            <audio ref={audioRef} src={results.recordingUrl} controls style={{ width: '100%', height: 36 }} />
+            {results.errorSegments && results.errorSegments.length > 0 && (
+              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {results.errorSegments.map((segment) => (
+                  <button
+                    type="button"
+                    key={segment.id}
+                    onClick={() => seekRecording(segment.startMs)}
+                    style={{
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      background: 'rgba(255,255,255,0.04)',
+                      color: '#A8BCD8',
+                      borderRadius: 10,
+                      padding: '8px 10px',
+                      display: 'grid',
+                      gridTemplateColumns: '54px 1fr',
+                      gap: 8,
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ color: '#00C9B1', fontSize: 10, fontWeight: 800 }}>{(segment.startMs / 1000).toFixed(1)}s</span>
+                    <span>
+                      <span style={{ display: 'block', color: '#E2EAF8', fontSize: 10, fontWeight: 700 }}>{segment.label}</span>
+                      <span style={{ display: 'block', color: '#6B80A8', fontSize: 9, marginTop: 2 }}>{segment.reason}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div style={{ padding: '6px 20px 14px', flexShrink: 0 }}>
         <div style={{ color: '#6B80A8', fontSize: 12, marginBottom: 10 }}>音符复盘</div>

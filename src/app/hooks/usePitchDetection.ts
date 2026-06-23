@@ -34,6 +34,7 @@ export function usePitchDetection() {
   const [inputLevel, setInputLevel] = useState(0);
   const [noiseFloor, setNoiseFloor] = useState(0);
   const [calibrationProgress, setCalibrationProgress] = useState(0);
+  const [stream, setStream] = useState<MediaStream | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const contextRef = useRef<AudioContext | null>(null);
   const frameRef = useRef<number | undefined>(undefined);
@@ -49,6 +50,7 @@ export function usePitchDetection() {
     frameRef.current = undefined;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    setStream(null);
     const context = contextRef.current;
     contextRef.current = null;
     if (context && context.state !== 'closed') void context.close();
@@ -61,15 +63,15 @@ export function usePitchDetection() {
   }, []);
 
   const start = useCallback(async () => {
-    if (streamRef.current && contextRef.current?.state === 'running') return true;
-    if (startingRef.current) return false;
+    if (streamRef.current && contextRef.current?.state === 'running') return streamRef.current;
+    if (startingRef.current) return null;
     const compatibility = inspectCurrentBrowserAudio();
     if (!compatibility.supported) {
       setStatus('unsupported');
       setMessage(compatibility.missing.includes('secure-context')
         ? '麦克风需要 HTTPS 或本地安全环境'
         : '当前浏览器缺少必要的音频能力');
-      return false;
+      return null;
     }
 
     setStatus('requesting');
@@ -87,7 +89,7 @@ export function usePitchDetection() {
         stream.getTracks().forEach((track) => track.stop());
         setStatus('unsupported');
         setMessage('当前浏览器不支持音频分析');
-        return false;
+        return null;
       }
 
       const context = new AudioContextClass();
@@ -100,6 +102,7 @@ export function usePitchDetection() {
       const buffer = new Float32Array(analyser.fftSize);
 
       streamRef.current = stream;
+      setStream(stream);
       pendingStream = null;
       contextRef.current = context;
       setStatus('calibrating');
@@ -154,7 +157,7 @@ export function usePitchDetection() {
         frameRef.current = requestAnimationFrame(analyse);
       };
       frameRef.current = requestAnimationFrame(analyse);
-      return true;
+      return stream;
     } catch (error) {
       pendingStream?.getTracks().forEach((track) => track.stop());
       setSample(null);
@@ -168,12 +171,12 @@ export function usePitchDetection() {
         setStatus('error');
         setMessage('麦克风启动失败，请检查设备后重试');
       }
-      return false;
+      return null;
     } finally {
       startingRef.current = false;
     }
   }, []);
 
   useEffect(() => stop, [stop]);
-  return { status, sample, message, inputLevel, noiseFloor, calibrationProgress, start, stop };
+  return { status, sample, message, inputLevel, noiseFloor, calibrationProgress, stream, start, stop };
 }

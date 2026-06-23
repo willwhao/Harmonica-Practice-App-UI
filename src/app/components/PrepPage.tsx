@@ -1,12 +1,15 @@
-import { useState } from 'react';
-import { ArrowLeft, Music2, Play, Headphones, Volume2, TimerReset } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ArrowLeft, Music2, Play, Headphones, Volume2, TimerReset, UploadCloud } from 'lucide-react';
 import type { PracticeSettings, Song } from '../types';
-import { getPracticeChart } from '../data/practiceCharts';
+import { getPracticeChart, type PracticeChart } from '../data/practiceCharts';
+import { getPracticeAudioAssets } from '../audio/practiceAudioAssets';
+import { transcribeAudioFile, type AudioTranscription } from '../audio/audioTranscription';
+import { createPracticeChartFromTranscription } from '../audio/transcriptionChart';
 
 interface Props {
   song: Song;
   onBack: () => void;
-  onStart: (settings: PracticeSettings) => void;
+  onStart: (settings: PracticeSettings, importedChart?: PracticeChart) => void;
 }
 
 type Accompaniment = 'original' | 'simplified' | 'none';
@@ -63,8 +66,44 @@ function OptionGroup<T extends string>({
   );
 }
 
+function RangeSlider({
+  label,
+  value,
+  onChange,
+  suffix = '%',
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  suffix?: string;
+}) {
+  return (
+    <div style={{ marginBottom: 13 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
+        <span style={{ color: '#6B80A8', fontSize: 12 }}>{label}</span>
+        <span style={{ color: '#00C9B1', fontSize: 12, fontWeight: 700 }}>{value}{suffix}</span>
+      </div>
+      <div style={{ position: 'relative', height: 24, display: 'flex', alignItems: 'center' }}>
+        <div style={{ height: 4, width: '100%', background: 'rgba(255,255,255,0.08)', borderRadius: 2 }}>
+          <div style={{ height: '100%', width: `${value}%`, background: 'linear-gradient(90deg,#00C9B1,#0891B2)', borderRadius: 2 }} />
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={value}
+          onChange={(event) => onChange(Number(event.target.value))}
+          aria-label={label}
+          style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', cursor: 'pointer' }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function PrepPage({ song, onBack, onStart }: Props) {
   const measureCount = getPracticeChart(song.id).chart.measures.length;
+  const audioAssets = getPracticeAudioAssets(song);
   const [accompaniment, setAccompaniment] = useState<Accompaniment>('original');
   const [harpType, setHarpType] = useState<HarpType>(song.harmonicaType);
   const [scoreMode, setScoreMode] = useState<ScoreMode>('dynamic');
@@ -74,7 +113,53 @@ export function PrepPage({ song, onBack, onStart }: Props) {
   const [customEndMeasure, setCustomEndMeasure] = useState(measureCount);
   const [repeatChoice, setRepeatChoice] = useState<RepeatChoice>('1');
   const [metronomeEnabled, setMetronomeEnabled] = useState(true);
+  const [accompanimentVolume, setAccompanimentVolume] = useState(70);
+  const [metronomeVolume, setMetronomeVolume] = useState(65);
+  const [demoVolume, setDemoVolume] = useState(55);
+  const [transcription, setTranscription] = useState<AudioTranscription | null>(null);
+  const [transcriptionStatus, setTranscriptionStatus] = useState('');
+  const [audioPrivacyAccepted, setAudioPrivacyAccepted] = useState(false);
+  const importedChart = useMemo(() => transcription ? createPracticeChartFromTranscription({
+    song,
+    transcription,
+    harmonicaType: harpType,
+  }) : null, [harpType, song, transcription]);
   const speedFill = ((speed - 50) / (120 - 50)) * 100;
+  const buildSettings = (): PracticeSettings => ({
+    accompaniment,
+    harmonicaType: harpType,
+    scoreMode,
+    speed,
+    accompanimentVolume,
+    metronomeVolume,
+    demoVolume,
+    practiceRange,
+    customStartMeasure,
+    customEndMeasure,
+    repeatCount: Number(repeatChoice) as 1 | 2 | 3,
+    metronomeEnabled,
+  });
+  const handleAudioUpload = async (file: File | undefined) => {
+    if (!file) return;
+    if (!audioPrivacyAccepted) {
+      setTranscriptionStatus('请先确认音频仅在本机浏览器内处理，再选择文件。');
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      setTranscriptionStatus('音频文件过大，请先裁剪到 25MB 以内。');
+      return;
+    }
+    setTranscription(null);
+    setTranscriptionStatus(`正在识别《${file.name}》…`);
+    try {
+      const nextTranscription = await transcribeAudioFile(file, song.key);
+      setTranscription(nextTranscription);
+      const nextChart = createPracticeChartFromTranscription({ song, transcription: nextTranscription, harmonicaType: harpType });
+      setTranscriptionStatus(nextTranscription.warning ?? (nextChart ? `已识别 ${nextTranscription.notes.length} 个音符，可生成临时练习谱` : '识别到音符，但未能生成有效练习谱，请尝试更清晰的独奏音频。'));
+    } catch {
+      setTranscriptionStatus('音频解码或识别失败，请尝试 MP3、WAV、M4A 等浏览器支持的格式。');
+    }
+  };
 
   return (
     <div
@@ -290,6 +375,100 @@ export function PrepPage({ song, onBack, onStart }: Props) {
           onChange={setAccompaniment}
         />
 
+        <div style={{ margin: '-2px 0 16px', padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.07)' }}>
+          <RangeSlider label="伴奏音量" value={accompanimentVolume} onChange={setAccompanimentVolume} />
+          <RangeSlider label="节拍器音量" value={metronomeVolume} onChange={setMetronomeVolume} />
+          <RangeSlider label="示范音量" value={demoVolume} onChange={setDemoVolume} />
+          <div style={{ color: '#607391', fontSize: 10, lineHeight: 1.5 }}>
+            当前使用浏览器合成伴奏；原曲伴奏和教师示范音轨需取得授权资源后启用。
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ color: '#6B80A8', fontSize: 12 }}>音频资源状态</div>
+          {audioAssets.map((asset) => (
+            <div key={asset.id} style={{ padding: '8px 10px', borderRadius: 10, background: asset.status === 'available' ? 'rgba(0,201,177,0.07)' : 'rgba(245,158,11,0.07)', border: `1px solid ${asset.status === 'available' ? 'rgba(0,201,177,0.15)' : 'rgba(245,158,11,0.14)'}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                <span style={{ color: '#E2EAF8', fontSize: 11, fontWeight: 700 }}>{asset.label}</span>
+                <span style={{ color: asset.status === 'available' ? '#00C9B1' : '#F59E0B', fontSize: 10, fontWeight: 700 }}>{asset.status === 'available' ? '可用' : '需授权'}</span>
+              </div>
+              <div style={{ color: '#607391', fontSize: 9, marginTop: 3 }}>{asset.source}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ marginBottom: 16, padding: 12, borderRadius: 14, background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.16)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+            <div>
+              <div style={{ color: '#E9D5FF', fontSize: 12, fontWeight: 800 }}>上传音频识别简谱</div>
+              <div style={{ color: '#7D8FAE', fontSize: 10, marginTop: 2 }}>支持 MP3/WAV/M4A；适合清晰口琴独奏或示范音轨</div>
+            </div>
+            <UploadCloud size={20} color="#A855F7" />
+          </div>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, color: '#A8BCD8', fontSize: 10, lineHeight: 1.5, marginBottom: 9 }}>
+            <input
+              type="checkbox"
+              checked={audioPrivacyAccepted}
+              onChange={(event) => setAudioPrivacyAccepted(event.target.checked)}
+              style={{ marginTop: 2, accentColor: '#A855F7' }}
+            />
+            我了解：上传音频只在本机浏览器内解码和识别，不会自动上传；识别结果为草稿，需要自行确认版权与准确性。
+          </label>
+          <label style={{ display: 'block', border: '1px dashed rgba(168,85,247,0.35)', borderRadius: 12, padding: '10px 12px', color: '#C4B5FD', fontSize: 11, textAlign: 'center', cursor: 'pointer', background: 'rgba(168,85,247,0.05)' }}>
+            选择音频文件并生成简谱草稿
+            <input
+              type="file"
+              accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/mp4,audio/m4a,audio/*"
+              onChange={(event) => void handleAudioUpload(event.target.files?.[0])}
+              style={{ display: 'none' }}
+            />
+          </label>
+          {transcriptionStatus && (
+            <div style={{ color: transcription?.warning ? '#F59E0B' : '#A8BCD8', fontSize: 10, lineHeight: 1.5, marginTop: 8 }}>
+              {transcriptionStatus}
+            </div>
+          )}
+          {transcription && transcription.notes.length > 0 && (
+            <div style={{ marginTop: 10, borderRadius: 12, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', padding: 10 }}>
+              <div style={{ color: '#6B80A8', fontSize: 10, marginBottom: 5 }}>简谱草稿（{song.key} 调）</div>
+              <div style={{ color: '#E2EAF8', fontSize: 18, fontWeight: 800, lineHeight: 1.6, wordBreak: 'break-word' }}>
+                {transcription.jianpuLine}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 6, marginTop: 8, maxHeight: 126, overflowY: 'auto' }}>
+                {transcription.notes.slice(0, 32).map((note, index) => (
+                  <div key={`${note.startSec}-${index}`} style={{ padding: '6px 5px', borderRadius: 8, background: 'rgba(255,255,255,0.045)', textAlign: 'center' }}>
+                    <div style={{ color: '#E2EAF8', fontSize: 13, fontWeight: 800 }}>{note.jianpu}</div>
+                    <div style={{ color: '#7D8FAE', fontSize: 8, marginTop: 2 }}>{note.noteName} · {note.startSec.toFixed(1)}s</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ color: '#607391', fontSize: 9, marginTop: 8, lineHeight: 1.5 }}>
+                这是自动识别草稿，复杂伴奏或人声会影响结果；后续可把草稿转成正式练习谱。
+              </div>
+              {importedChart && (
+                <button
+                  type="button"
+                  onClick={() => onStart({ ...buildSettings(), practiceRange: 'full', customStartMeasure: 0, customEndMeasure: importedChart.measures.length }, importedChart)}
+                  style={{
+                    marginTop: 10,
+                    width: '100%',
+                    border: 'none',
+                    borderRadius: 11,
+                    padding: '11px 12px',
+                    background: 'linear-gradient(135deg,#A855F7,#7C3AED)',
+                    color: 'white',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                  }}
+                >
+                  用识别草稿开始练习 · {importedChart.notes.length} 音
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
         <OptionGroup<HarpType>
           label="口琴类型"
           options={[
@@ -315,7 +494,7 @@ export function PrepPage({ song, onBack, onStart }: Props) {
       <div style={{ padding: '16px 20px 40px', flexShrink: 0 }}>
         <button
           type="button"
-          onClick={() => onStart({ accompaniment, harmonicaType: harpType, scoreMode, speed, practiceRange, customStartMeasure, customEndMeasure, repeatCount: Number(repeatChoice) as 1 | 2 | 3, metronomeEnabled })}
+          onClick={() => onStart(buildSettings())}
           style={{
             width: '100%',
             padding: '16px',

@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { ArrowLeft, CloudOff, Download, LogOut, Save, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import type { AuthUser, UserPreferences } from '../types';
+import { getPrivacyChecklist, summarizePrivacyReadiness } from '../privacy/privacyChecklist';
+import { getCompatibilityChecklist, summarizeCompatibilityReadiness } from '../compat/compatibilityChecklist';
 
 interface Props {
   user: AuthUser | null;
@@ -17,6 +19,10 @@ export function AccountPage({ user, historyCount, onBack, onSave, onLogout, onCr
   const [nickname, setNickname] = useState(user?.nickname ?? '游客');
   const [preferences, setPreferences] = useState<UserPreferences>(user?.preferences ?? { defaultHarmonica: 'diatonic', dailyGoalMinutes: 15, skillLevel: 'beginner' });
   const [saved, setSaved] = useState(false);
+  const privacyChecklist = getPrivacyChecklist();
+  const privacySummary = summarizePrivacyReadiness(privacyChecklist);
+  const compatibilityChecklist = getCompatibilityChecklist();
+  const compatibilitySummary = summarizeCompatibilityReadiness(compatibilityChecklist);
 
   const save = () => {
     if (!user) return;
@@ -77,10 +83,52 @@ export function AccountPage({ user, historyCount, onBack, onSave, onLogout, onCr
             <button type="button" onClick={onLogout} style={secondaryButtonStyle}><LogOut size={15} /> 退出登录</button>
             <button type="button" onClick={() => { if (window.confirm('确定删除本地账户及其账户练习记录吗？此操作无法撤销。')) onDelete(); }} style={{ ...secondaryButtonStyle, color: '#FCA5A5', borderColor: 'rgba(239,68,68,0.2)' }}><Trash2 size={15} /> 删除本地账户</button>
           </Section>
+
+          <Section title="隐私与数据处理">
+            <InfoRow
+              icon={<ShieldCheck size={17} />}
+              title={`已完成 ${privacySummary.implemented}/${privacySummary.total} 项隐私控制`}
+              detail="上传音频与练习录音默认在本机处理；正式法律文本仍待发布前补齐。"
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              {privacyChecklist.map((item) => (
+                <div key={item.id} style={{ padding: '9px 10px', borderRadius: 11, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ color: '#DCE8F8', fontSize: 11, fontWeight: 700 }}>{item.label}</span>
+                    <span style={{ color: item.status === 'implemented' ? '#00C9B1' : item.status === 'partial' ? '#F59E0B' : '#7D8FAE', fontSize: 9, fontWeight: 800 }}>
+                      {item.status === 'implemented' ? '已实现' : item.status === 'partial' ? '部分' : '待补充'}
+                    </span>
+                  </div>
+                  <div style={{ color: '#6B80A8', fontSize: 9, lineHeight: 1.45, marginTop: 3 }}>{item.detail}</div>
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          <Section title="无障碍与兼容性">
+            <InfoRow
+              icon={<ShieldCheck size={17} />}
+              title={`已完成 ${compatibilitySummary.implemented}/${compatibilitySummary.total} 项兼容控制`}
+              detail="移动视口、键盘焦点和减少动画已接入；Safari/Firefox/真机麦克风仍需专项验证。"
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              {compatibilityChecklist.map((item) => (
+                <div key={item.id} style={{ padding: '9px 10px', borderRadius: 11, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ color: '#DCE8F8', fontSize: 11, fontWeight: 700 }}>{item.label}</span>
+                    <span style={{ color: item.status === 'implemented' ? '#00C9B1' : item.status === 'partial' ? '#F59E0B' : '#7D8FAE', fontSize: 9, fontWeight: 800 }}>
+                      {item.status === 'implemented' ? '已实现' : item.status === 'partial' ? '部分' : '待补充'}
+                    </span>
+                  </div>
+                  <div style={{ color: '#6B80A8', fontSize: 9, lineHeight: 1.45, marginTop: 3 }}>{item.detail}</div>
+                </div>
+              ))}
+            </div>
+          </Section>
         </>
       )}
 
-      <div style={{ display: 'flex', gap: 8, color: '#4A5A78', fontSize: 10, lineHeight: 1.55, marginTop: 22 }}><ShieldCheck size={16} style={{ flexShrink: 0 }} />本地账户用于验证产品流程，不等同于正式云端身份系统。</div>
+      <div style={{ display: 'flex', gap: 8, color: '#4A5A78', fontSize: 10, lineHeight: 1.55, marginTop: 22 }}><ShieldCheck size={16} style={{ flexShrink: 0 }} />本地账户用于验证产品流程，不等同于正式云端身份系统。正式发布仍需补齐用户协议、隐私政策和版本化合规文档。</div>
     </div>
   );
 }

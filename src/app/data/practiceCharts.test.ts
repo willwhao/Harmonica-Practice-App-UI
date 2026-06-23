@@ -50,3 +50,14 @@ test('registered chart collection has unique song ids and valid schemas', () => 
   assert.equal(new Set(charts.map((chart) => chart.songId)).size, charts.length);
   assert.ok(charts.every((chart) => validatePracticeChart(chart).valid));
 });
+
+test('charts include long notes and deterministic hole lanes', () => {
+  const charts = getAvailablePracticeCharts();
+  assert.ok(charts.some((chart) => chart.notes.some((note) => note.durationBeats > 1)));
+  charts.forEach((chart) => {
+    chart.notes.forEach((note) => {
+      assert.equal(note.track, note.hole - 1);
+      assert.ok(note.durationBeats >= 1);
+    });
+  });
+});

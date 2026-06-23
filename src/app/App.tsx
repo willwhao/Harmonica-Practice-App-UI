@@ -9,6 +9,7 @@ import { AccountPage } from './components/AccountPage';
 import { LearningPage } from './components/LearningPage';
 import { SONGS } from './data';
 import type { AuthUser, GameResults, PracticeBookmark, PracticeHistoryEntry, PracticeSettings, Song } from './types';
+import type { PracticeChart } from './data/practiceCharts';
 import { deleteLocalAccount, getLocalUserExport, loadSessionUser, logoutLocalAccount, updateLocalUser } from './auth/authStore';
 import { summarizeWeakMeasures } from './practice/practiceInsights';
 import { deleteCloudAccount, isCloudMode, logoutCloudAccount, refreshCloudSession, syncCloudHistory, updateCloudUser } from './cloud/cloudClient';
@@ -21,6 +22,9 @@ const DEFAULT_SETTINGS: PracticeSettings = {
   harmonicaType: 'diatonic',
   scoreMode: 'dynamic',
   speed: 100,
+  accompanimentVolume: 70,
+  metronomeVolume: 65,
+  demoVolume: 55,
   practiceRange: 'full',
   customStartMeasure: 0,
   customEndMeasure: 12,
@@ -109,6 +113,7 @@ export default function App() {
   const [selectedSong, setSelectedSong] = useState<Song>(SONGS[0]);
   const [results, setResults] = useState<GameResults | null>(null);
   const [settings, setSettings] = useState<PracticeSettings>(DEFAULT_SETTINGS);
+  const [importedChart, setImportedChart] = useState<PracticeChart | null>(null);
   const [history, setHistory] = useState<PracticeHistoryEntry[]>(() => loadHistory(isCloudMode() ? undefined : loadSessionUser()?.id));
   const [bookmarks, setBookmarks] = useState<PracticeBookmark[]>(() => loadBookmarks(isCloudMode() ? undefined : loadSessionUser()?.id));
 
@@ -247,6 +252,7 @@ export default function App() {
     if (!song) return;
     setSelectedSong(song);
     setSettings((current) => ({ ...current, speed: 80, practiceRange: 'custom', customStartMeasure: bookmark.startMeasure, customEndMeasure: bookmark.endMeasure, repeatCount: 3, metronomeEnabled: true }));
+    setImportedChart(null);
     setPage('practice');
   };
 
@@ -273,20 +279,21 @@ export default function App() {
               user={user}
               onAccount={() => setPage('account')}
               onLearning={() => setPage('learning')}
-              onSelect={(s) => { setSelectedSong(s); setPage('prep'); }}
+              onSelect={(s) => { setSelectedSong(s); setImportedChart(null); setPage('prep'); }}
             />
           )}
           {!requireAuthentication && page === 'prep' && (
             <PrepPage
               song={selectedSong}
               onBack={() => setPage('home')}
-              onStart={(nextSettings) => { setSettings(nextSettings); setPage('practice'); }}
+              onStart={(nextSettings, nextImportedChart) => { setSettings(nextSettings); setImportedChart(nextImportedChart ?? null); setPage('practice'); }}
             />
           )}
           {!requireAuthentication && page === 'practice' && (
             <PracticePage
               song={selectedSong}
               settings={settings}
+              importedChart={importedChart ?? undefined}
               onBack={() => setPage('prep')}
               onFinish={finishPractice}
             />
@@ -319,7 +326,7 @@ export default function App() {
               history={history}
               bookmarks={bookmarks}
               onBack={() => setPage('home')}
-              onSelectSong={(song) => { setSelectedSong(song); setPage('prep'); }}
+              onSelectSong={(song) => { setSelectedSong(song); setImportedChart(null); setPage('prep'); }}
               onPracticeBookmark={practiceBookmark}
             />
           )}

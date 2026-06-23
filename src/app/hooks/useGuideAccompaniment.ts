@@ -8,8 +8,13 @@ const CHORDS = [
   [130.81, 164.81, 196],
 ];
 
-export function useGuideAccompaniment() {
+export function useGuideAccompaniment(volume = 70) {
   const contextRef = useRef<AudioContext | null>(null);
+  const volumeRef = useRef(volume);
+
+  useEffect(() => {
+    volumeRef.current = volume;
+  }, [volume]);
 
   const prepare = useCallback(async () => {
     const AudioContextClass = window.AudioContext
@@ -34,8 +39,9 @@ export function useGuideAccompaniment() {
       const gain = context.createGain();
       oscillator.type = mode === 'simplified' ? 'sine' : 'triangle';
       oscillator.frequency.value = frequency;
-      const volume = mode === 'simplified' ? 0.035 : 0.022 / Math.max(1, frequencies.length / 2);
-      gain.gain.setValueAtTime(volume, context.currentTime);
+      const scalar = Math.max(0, Math.min(1, volumeRef.current / 100));
+      const baseVolume = mode === 'simplified' ? 0.035 : 0.022 / Math.max(1, frequencies.length / 2);
+      gain.gain.setValueAtTime(baseVolume * scalar, context.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + duration);
       oscillator.connect(gain);
       gain.connect(context.destination);
