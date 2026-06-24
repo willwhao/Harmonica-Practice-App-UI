@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { detectPitch, measureRms, type PitchSample } from '../audio/pitchDetection';
 import { inspectCurrentBrowserAudio } from '../audio/audioCompatibility';
+import type { PitchWorkerRequest, PitchWorkerResponse } from '../audio/pitchWorkerProtocol';
 
 export interface LivePitchSample extends PitchSample {
   capturedAt: number;
@@ -44,12 +45,18 @@ export function usePitchDetection() {
   const previousSampleRef = useRef<LivePitchSample | null>(null);
   const previousLevelRef = useRef(0);
   const frequencyWindowRef = useRef<number[]>([]);
+  const workerRef = useRef<Worker | null>(null);
+  const workerBusyRef = useRef(false);
+  const workerRequestIdRef = useRef(0);
 
   const stop = useCallback(() => {
     if (frameRef.current) cancelAnimationFrame(frameRef.current);
     frameRef.current = undefined;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    workerRef.current?.terminate();
+    workerRef.current = null;
+    workerBusyRef.current = false;
     setStream(null);
     const context = contextRef.current;
     contextRef.current = null;
@@ -100,6 +107,7 @@ export function usePitchDetection() {
       analyser.smoothingTimeConstant = 0;
       source.connect(analyser);
       const buffer = new Float32Array(analyser.fftSize);
+      let worker: Worker | null = null;
 
       streamRef.current = stream;
       setStream(stream);
@@ -124,34 +132,68 @@ export function usePitchDetection() {
       setStatus('listening');
       setMessage('校准完成，等待吹奏');
 
+      const applyDetectedSample = (detected: PitchSample | null, rms: number) => {
+        if (detected) {
+          const previous = previousSampleRef.current;
+          const onset = !previous || previous.note !== detected.note || rms > previousLevelRef.current * 1.35;
+          if (!previous || previous.note !== detected.note) frequencyWindowRef.current = [];
+          frequencyWindowRef.current = [...frequencyWindowRef.current.slice(-7), detected.frequency];
+          const nextSample: LivePitchSample = {
+            ...detected,
+            capturedAt: performance.now(),
+            onset,
+            stabilityCents: calculateStability(frequencyWindowRef.current),
+          };
+          previousSampleRef.current = nextSample;
+          setSample(nextSample);
+          setMessage('正在识别演奏音高');
+        } else {
+          previousSampleRef.current = null;
+          frequencyWindowRef.current = [];
+          setSample(null);
+          setMessage(rms <= minimumRmsRef.current ? '等待口琴声音' : '输入不稳定，请靠近麦克风');
+        }
+        previousLevelRef.current = rms;
+      };
+
+      if (typeof Worker !== 'undefined') {
+        worker = new Worker(new URL('../audio/pitchDetection.worker.ts', import.meta.url), { type: 'module' });
+        worker.onmessage = (event: MessageEvent<PitchWorkerResponse & { rms?: number }>) => {
+          workerBusyRef.current = false;
+          if (!contextRef.current) return;
+          applyDetectedSample(event.data.sample, event.data.rms ?? previousLevelRef.current);
+        };
+        worker.onerror = () => {
+          worker?.terminate();
+          workerRef.current = null;
+          workerBusyRef.current = false;
+          setMessage('Worker 不可用，已回退到主线程识别');
+        };
+        workerRef.current = worker;
+      }
+
       const analyse = (time: number) => {
         if (time - lastAnalysisRef.current >= 50) {
           analyser.getFloatTimeDomainData(buffer);
           const rms = measureRms(buffer);
           const level = Math.round(Math.min(1, rms * 8) * 100);
-          const detected = detectPitch(buffer, context.sampleRate, minimumRmsRef.current);
           setInputLevel(level);
-          if (detected) {
-            const previous = previousSampleRef.current;
-            const onset = !previous || previous.note !== detected.note || rms > previousLevelRef.current * 1.35;
-            if (!previous || previous.note !== detected.note) frequencyWindowRef.current = [];
-            frequencyWindowRef.current = [...frequencyWindowRef.current.slice(-7), detected.frequency];
-            const nextSample: LivePitchSample = {
-              ...detected,
-              capturedAt: performance.now(),
-              onset,
-              stabilityCents: calculateStability(frequencyWindowRef.current),
+
+          if (workerRef.current && !workerBusyRef.current) {
+            workerBusyRef.current = true;
+            const samples = new Float32Array(buffer);
+            const request: PitchWorkerRequest & { rms: number } = {
+              id: workerRequestIdRef.current += 1,
+              samples,
+              sampleRate: context.sampleRate,
+              minimumRms: minimumRmsRef.current,
+              rms,
             };
-            previousSampleRef.current = nextSample;
-            setSample(nextSample);
-            setMessage('正在识别演奏音高');
+            workerRef.current.postMessage(request, [samples.buffer]);
           } else {
-            previousSampleRef.current = null;
-            frequencyWindowRef.current = [];
-            setSample(null);
-            setMessage(rms <= minimumRmsRef.current ? '等待口琴声音' : '输入不稳定，请靠近麦克风');
+            const detected = detectPitch(buffer, context.sampleRate, minimumRmsRef.current);
+            applyDetectedSample(detected, rms);
           }
-          previousLevelRef.current = rms;
           lastAnalysisRef.current = time;
         }
         frameRef.current = requestAnimationFrame(analyse);

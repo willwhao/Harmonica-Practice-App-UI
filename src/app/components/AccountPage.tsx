@@ -3,6 +3,7 @@ import { ArrowLeft, CloudOff, Download, LogOut, Save, ShieldCheck, Trash2, UserR
 import type { AuthUser, UserPreferences } from '../types';
 import { getPrivacyChecklist, summarizePrivacyReadiness } from '../privacy/privacyChecklist';
 import { getCompatibilityChecklist, summarizeCompatibilityReadiness } from '../compat/compatibilityChecklist';
+import { buildReleaseConfig, summarizeReleaseReadiness } from '../ops/releaseConfig';
 
 interface Props {
   user: AuthUser | null;
@@ -23,6 +24,8 @@ export function AccountPage({ user, historyCount, onBack, onSave, onLogout, onCr
   const privacySummary = summarizePrivacyReadiness(privacyChecklist);
   const compatibilityChecklist = getCompatibilityChecklist();
   const compatibilitySummary = summarizeCompatibilityReadiness(compatibilityChecklist);
+  const releaseConfig = buildReleaseConfig();
+  const releaseSummary = summarizeReleaseReadiness(releaseConfig);
 
   const save = () => {
     if (!user) return;
@@ -121,6 +124,27 @@ export function AccountPage({ user, historyCount, onBack, onSave, onLogout, onCr
                     </span>
                   </div>
                   <div style={{ color: '#6B80A8', fontSize: 9, lineHeight: 1.45, marginTop: 3 }}>{item.detail}</div>
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          <Section title="运营与发布状态">
+            <InfoRow
+              icon={<ShieldCheck size={17} />}
+              title={releaseSummary.label}
+              detail={`已开启 ${releaseSummary.enabled}/${releaseSummary.total} 个功能开关，环境覆盖 ${releaseSummary.environmentOverrides} 项。`}
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              {Object.values(releaseConfig.flags).map((flag) => (
+                <div key={flag.key} style={{ padding: '9px 10px', borderRadius: 11, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ color: '#DCE8F8', fontSize: 11, fontWeight: 700 }}>{flag.label}</span>
+                    <span style={{ color: flag.enabled ? '#00C9B1' : '#7D8FAE', fontSize: 9, fontWeight: 800 }}>
+                      {flag.enabled ? '开启' : '关闭'} · {flag.source === 'environment' ? '环境变量' : '默认'}
+                    </span>
+                  </div>
+                  <div style={{ color: '#6B80A8', fontSize: 9, lineHeight: 1.45, marginTop: 3 }}>{flag.description}</div>
                 </div>
               ))}
             </div>

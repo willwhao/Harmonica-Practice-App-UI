@@ -8,6 +8,7 @@ interface Props {
   user: AuthUser | null;
   onAccount: () => void;
   onLearning: () => void;
+  onCalibrate?: () => void;
   onSelect: (song: Song) => void;
 }
 
@@ -113,7 +114,7 @@ function SongCard({ song, onSelect }: { song: Song; onSelect: () => void }) {
   );
 }
 
-export function HomePage({ songs, history, user, onAccount, onLearning, onSelect }: Props) {
+export function HomePage({ songs, history, user, onAccount, onLearning, onCalibrate, onSelect }: Props) {
   const [genre, setGenre] = useState('全部');
   const [harpType, setHarpType] = useState('全部');
   const [search, setSearch] = useState('');
@@ -161,6 +162,9 @@ export function HomePage({ songs, history, user, onAccount, onLearning, onSelect
             <h1 style={{ color: '#E2EAF8', fontSize: 22, fontWeight: 700, lineHeight: 1.2 }}>练习曲目</h1>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
+            {onCalibrate && (
+              <button type="button" onClick={onCalibrate} aria-label="打开口琴校准" style={{ width: 40, height: 40, borderRadius: 20, border: '1px solid rgba(0,201,177,0.18)', background: 'rgba(0,201,177,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><Sliders size={18} color="#00C9B1" /></button>
+            )}
             <button type="button" onClick={onLearning} aria-label="打开学习中心" style={{ width: 40, height: 40, borderRadius: 20, border: '1px solid rgba(255,255,255,0.09)', background: 'rgba(255,255,255,0.055)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><GraduationCap size={18} color="#A8BCD8" /></button>
             <button type="button" onClick={onAccount} aria-label={user ? `打开${user.nickname}的账户设置` : '打开游客账户设置'} style={{ width: 40, height: 40, borderRadius: 20, border: 'none', background: 'linear-gradient(135deg,#00C9B1,#0891B2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#051015', fontWeight: 850 }}>
               {user ? user.nickname.slice(0, 1).toUpperCase() : <UserRound size={18} />}

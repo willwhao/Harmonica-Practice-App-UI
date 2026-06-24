@@ -13,6 +13,9 @@
 ## 2. 环境与密钥
 
 - [ ] 生产环境已配置 HTTPS。
+- [ ] `VITE_APP_VERSION` 与本次发布版本一致。
+- [ ] `VITE_RELEASE_CHANNEL` 已设置为 `production`、`preview` 或 `development`。
+- [ ] 实验性功能开关已按发布范围确认，尤其是上传音频识谱和运营状态面板。
 - [ ] `JWT_SECRET` 使用 32 字符以上随机密钥，未提交到仓库。
 - [ ] `APP_ORIGIN` 指向正式域名。
 - [ ] SMTP 配置可发送密码重置邮件。

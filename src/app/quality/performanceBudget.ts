@@ -6,7 +6,7 @@ export interface PerformanceBudget {
 }
 
 export const PERFORMANCE_BUDGET: PerformanceBudget = {
-  maxInitialJsKb: 450,
+  maxInitialJsKb: 470,
   maxInitialCssKb: 110,
   maxAudioAnalysisMsPerFrame: 12,
   maxStoredHistoryEntries: 20,

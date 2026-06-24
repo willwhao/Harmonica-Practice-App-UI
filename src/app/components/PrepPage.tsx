@@ -1,15 +1,19 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeft, Music2, Play, Headphones, Volume2, TimerReset, UploadCloud } from 'lucide-react';
+import { ArrowLeft, Music2, Play, Headphones, Volume2, TimerReset, UploadCloud, Sliders } from 'lucide-react';
 import type { PracticeSettings, Song } from '../types';
 import { getPracticeChart, type PracticeChart } from '../data/practiceCharts';
 import { getPracticeAudioAssets } from '../audio/practiceAudioAssets';
 import { transcribeAudioFile, type AudioTranscription } from '../audio/audioTranscription';
 import { createPracticeChartFromTranscription } from '../audio/transcriptionChart';
+import { buildReleaseConfig, isFeatureEnabled } from '../ops/releaseConfig';
+import { formatPitchOffset, type PersonalPitchProfile } from '../practice/pitchProfile';
 
 interface Props {
   song: Song;
+  pitchProfile?: PersonalPitchProfile | null;
   onBack: () => void;
   onStart: (settings: PracticeSettings, importedChart?: PracticeChart) => void;
+  onCalibrate?: () => void;
 }
 
 type Accompaniment = 'original' | 'simplified' | 'none';
@@ -101,9 +105,11 @@ function RangeSlider({
   );
 }
 
-export function PrepPage({ song, onBack, onStart }: Props) {
+export function PrepPage({ song, pitchProfile, onBack, onStart, onCalibrate }: Props) {
   const measureCount = getPracticeChart(song.id).chart.measures.length;
   const audioAssets = getPracticeAudioAssets(song);
+  const releaseConfig = buildReleaseConfig();
+  const audioUploadEnabled = isFeatureEnabled(releaseConfig, 'audioUploadTranscription');
   const [accompaniment, setAccompaniment] = useState<Accompaniment>('original');
   const [harpType, setHarpType] = useState<HarpType>(song.harmonicaType);
   const [scoreMode, setScoreMode] = useState<ScoreMode>('dynamic');
@@ -289,6 +295,25 @@ export function PrepPage({ song, onBack, onStart }: Props) {
 
       {/* Options */}
       <div style={{ padding: '0 20px', flex: 1 }}>
+        <div style={{ marginBottom: 16, padding: 13, borderRadius: 14, background: pitchProfile ? 'rgba(0,201,177,0.07)' : 'rgba(245,158,11,0.07)', border: `1px solid ${pitchProfile ? 'rgba(0,201,177,0.16)' : 'rgba(245,158,11,0.15)'}`, display: 'flex', alignItems: 'center', gap: 11 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 13, background: pitchProfile ? 'rgba(0,201,177,0.13)' : 'rgba(245,158,11,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Sliders size={18} color={pitchProfile ? '#00C9B1' : '#F59E0B'} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ color: '#E2EAF8', fontSize: 12, fontWeight: 800 }}>音高校准</div>
+            <div style={{ color: '#7D8FAE', fontSize: 10, lineHeight: 1.45, marginTop: 2 }}>
+              {pitchProfile
+                ? `已应用 ${pitchProfile.sampleCount} 个样本，整体偏移 ${formatPitchOffset(pitchProfile.averageOffsetCents)}`
+                : '未建立个人校准表；可先校准再开始练习。'}
+            </div>
+          </div>
+          {onCalibrate && (
+            <button type="button" onClick={onCalibrate} style={{ border: 'none', borderRadius: 11, background: pitchProfile ? 'rgba(0,201,177,0.13)' : 'rgba(245,158,11,0.13)', color: pitchProfile ? '#00C9B1' : '#F59E0B', fontSize: 11, fontWeight: 800, padding: '9px 10px', cursor: 'pointer', flexShrink: 0 }}>
+              {pitchProfile ? '重校' : '校准'}
+            </button>
+          )}
+        </div>
+
         {/* Speed slider */}
         <div style={{ marginBottom: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -401,28 +426,36 @@ export function PrepPage({ song, onBack, onStart }: Props) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
             <div>
               <div style={{ color: '#E9D5FF', fontSize: 12, fontWeight: 800 }}>上传音频识别简谱</div>
-              <div style={{ color: '#7D8FAE', fontSize: 10, marginTop: 2 }}>支持 MP3/WAV/M4A；适合清晰口琴独奏或示范音轨</div>
+              <div style={{ color: '#7D8FAE', fontSize: 10, marginTop: 2 }}>{audioUploadEnabled ? '支持 MP3/WAV/M4A；适合清晰口琴独奏或示范音轨' : `当前 ${releaseConfig.channel} 通道未开放该实验功能`}</div>
             </div>
             <UploadCloud size={20} color="#A855F7" />
           </div>
-          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, color: '#A8BCD8', fontSize: 10, lineHeight: 1.5, marginBottom: 9 }}>
-            <input
-              type="checkbox"
-              checked={audioPrivacyAccepted}
-              onChange={(event) => setAudioPrivacyAccepted(event.target.checked)}
-              style={{ marginTop: 2, accentColor: '#A855F7' }}
-            />
-            我了解：上传音频只在本机浏览器内解码和识别，不会自动上传；识别结果为草稿，需要自行确认版权与准确性。
-          </label>
-          <label style={{ display: 'block', border: '1px dashed rgba(168,85,247,0.35)', borderRadius: 12, padding: '10px 12px', color: '#C4B5FD', fontSize: 11, textAlign: 'center', cursor: 'pointer', background: 'rgba(168,85,247,0.05)' }}>
-            选择音频文件并生成简谱草稿
-            <input
-              type="file"
-              accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/mp4,audio/m4a,audio/*"
-              onChange={(event) => void handleAudioUpload(event.target.files?.[0])}
-              style={{ display: 'none' }}
-            />
-          </label>
+          {audioUploadEnabled ? (
+            <>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, color: '#A8BCD8', fontSize: 10, lineHeight: 1.5, marginBottom: 9 }}>
+                <input
+                  type="checkbox"
+                  checked={audioPrivacyAccepted}
+                  onChange={(event) => setAudioPrivacyAccepted(event.target.checked)}
+                  style={{ marginTop: 2, accentColor: '#A855F7' }}
+                />
+                我了解：上传音频只在本机浏览器内解码和识别，不会自动上传；识别结果为草稿，需要自行确认版权与准确性。
+              </label>
+              <label style={{ display: 'block', border: '1px dashed rgba(168,85,247,0.35)', borderRadius: 12, padding: '10px 12px', color: '#C4B5FD', fontSize: 11, textAlign: 'center', cursor: 'pointer', background: 'rgba(168,85,247,0.05)' }}>
+                选择音频文件并生成简谱草稿
+                <input
+                  type="file"
+                  accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/mp4,audio/m4a,audio/*"
+                  onChange={(event) => void handleAudioUpload(event.target.files?.[0])}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            </>
+          ) : (
+            <div style={{ color: '#A8BCD8', fontSize: 10, lineHeight: 1.55, border: '1px dashed rgba(168,85,247,0.25)', borderRadius: 12, padding: '10px 12px', background: 'rgba(168,85,247,0.04)' }}>
+              该功能仍处于实验阶段，正式发布通道默认关闭；可通过 `VITE_FEATURE_AUDIO_UPLOAD=true` 在预览环境或内部测试环境开启。
+            </div>
+          )}
           {transcriptionStatus && (
             <div style={{ color: transcription?.warning ? '#F59E0B' : '#A8BCD8', fontSize: 10, lineHeight: 1.5, marginTop: 8 }}>
               {transcriptionStatus}

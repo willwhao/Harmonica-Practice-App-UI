@@ -2,15 +2,22 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { getAvailablePracticeCharts, getPracticeChart, migrateChart, validatePracticeChart } from './practiceCharts.ts';
 
-test('provides three independent full diatonic arrangements', () => {
-  const charts = ['1', '2', '3'].map((songId) => getPracticeChart(songId));
+test('provides at least eight independent arrangements', () => {
+  const chartSongIds = ['1', '2', '3', '4', '5', '6', '7', '8'];
+  const charts = chartSongIds.map((songId) => getPracticeChart(songId));
   charts.forEach(({ chart, isFallback }, index) => {
     assert.equal(isFallback, false);
-    assert.equal(chart.songId, String(index + 1));
-    assert.equal(chart.measures.length, 12);
+    assert.equal(chart.songId, chartSongIds[index]);
+    assert.ok(chart.measures.length >= 8);
     assert.equal(validatePracticeChart(chart).valid, true);
   });
-  assert.equal(new Set(charts.map(({ chart }) => chart.id)).size, 3);
+  assert.equal(new Set(charts.map(({ chart }) => chart.id)).size, chartSongIds.length);
+});
+
+test('falls back only for songs that are still awaiting bespoke charts', () => {
+  const fallback = getPracticeChart('9');
+  assert.equal(fallback.isFallback, true);
+  assert.equal(fallback.chart.songId, '1');
 });
 
 test('includes a validated chromatic chart with slide notes', () => {
@@ -46,7 +53,7 @@ test('migrates version-one note defaults to schema version two', () => {
 
 test('registered chart collection has unique song ids and valid schemas', () => {
   const charts = getAvailablePracticeCharts();
-  assert.ok(charts.length >= 4);
+  assert.ok(charts.length >= 8);
   assert.equal(new Set(charts.map((chart) => chart.songId)).size, charts.length);
   assert.ok(charts.every((chart) => validatePracticeChart(chart).valid));
 });

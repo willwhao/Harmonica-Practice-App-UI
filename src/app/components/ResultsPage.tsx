@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { AlertTriangle, BookmarkPlus, Share2, RotateCcw, Home, CheckCircle, PlayCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { GameResults, Song } from '../types';
-import { getWeakestMeasure, summarizeTimingAndStability } from '../practice/practiceInsights';
+import { getWeakestMeasure, summarizeTimingAndStability } from '../../engine/practiceInsights';
 
 interface Props {
   results: GameResults;

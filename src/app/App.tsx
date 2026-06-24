@@ -1,5 +1,6 @@
 /* MARKER-MAKE-KIT-INVOKED */
 import { useEffect, useState } from 'react';
+import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from 'react-router';
 import { HomePage } from './components/HomePage';
 import { PrepPage } from './components/PrepPage';
 import { PracticePage } from './components/PracticePage';
@@ -7,11 +8,13 @@ import { ResultsPage } from './components/ResultsPage';
 import { AuthPage } from './components/AuthPage';
 import { AccountPage } from './components/AccountPage';
 import { LearningPage } from './components/LearningPage';
+import { CalibrationPage } from './components/CalibrationPage';
 import { SONGS } from './data';
 import type { AuthUser, GameResults, PracticeBookmark, PracticeHistoryEntry, PracticeSettings, Song } from './types';
 import type { PracticeChart } from './data/practiceCharts';
 import { deleteLocalAccount, getLocalUserExport, loadSessionUser, logoutLocalAccount, updateLocalUser } from './auth/authStore';
 import { summarizeWeakMeasures } from './practice/practiceInsights';
+import { loadPitchProfile } from './practice/pitchProfile';
 import { deleteCloudAccount, isCloudMode, logoutCloudAccount, refreshCloudSession, syncCloudHistory, updateCloudUser } from './cloud/cloudClient';
 
 const GUEST_HISTORY_KEY = 'harmonica-practice-history';
@@ -72,7 +75,9 @@ function saveBookmarks(bookmarks: PracticeBookmark[], userId?: string) {
   window.localStorage.setItem(bookmarksKey(userId), JSON.stringify(bookmarks));
 }
 
-type Page = 'home' | 'prep' | 'practice' | 'results' | 'account' | 'learning';
+function getSongById(songId?: string) {
+  return SONGS.find((item) => item.id === songId) ?? SONGS[0];
+}
 
 /* Phone status bar */
 function StatusBar() {
@@ -107,22 +112,32 @@ function StatusBar() {
 }
 
 export default function App() {
+  return (
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
+  );
+}
+
+function AppRoutes() {
+  const navigate = useNavigate();
   const [user, setUser] = useState<AuthUser | null>(() => isCloudMode() ? null : loadSessionUser());
   const [guestMode, setGuestMode] = useState(() => window.localStorage.getItem(GUEST_MODE_KEY) === 'true');
-  const [page, setPage] = useState<Page>('home');
   const [selectedSong, setSelectedSong] = useState<Song>(SONGS[0]);
   const [results, setResults] = useState<GameResults | null>(null);
   const [settings, setSettings] = useState<PracticeSettings>(DEFAULT_SETTINGS);
   const [importedChart, setImportedChart] = useState<PracticeChart | null>(null);
   const [history, setHistory] = useState<PracticeHistoryEntry[]>(() => loadHistory(isCloudMode() ? undefined : loadSessionUser()?.id));
   const [bookmarks, setBookmarks] = useState<PracticeBookmark[]>(() => loadBookmarks(isCloudMode() ? undefined : loadSessionUser()?.id));
+  const [pitchProfile, setPitchProfile] = useState(() => loadPitchProfile(isCloudMode() ? undefined : loadSessionUser()?.id));
 
   const activateGuest = () => {
     window.localStorage.setItem(GUEST_MODE_KEY, 'true');
     setGuestMode(true);
     setHistory(loadHistory());
     setBookmarks(loadBookmarks());
-    setPage('home');
+    setPitchProfile(loadPitchProfile());
+    navigate('/');
   };
 
   const authenticate = (nextUser: AuthUser) => {
@@ -137,7 +152,8 @@ export default function App() {
     setGuestMode(false);
     setHistory(migrated);
     setBookmarks(migratedBookmarks);
-    setPage('home');
+    setPitchProfile(loadPitchProfile(nextUser.id));
+    navigate('/');
     if (isCloudMode()) {
       void syncCloudHistory(migrated).then((synced) => {
         saveHistory(synced, nextUser.id);
@@ -185,7 +201,7 @@ export default function App() {
       }
       return next;
     });
-    setPage('results');
+    navigate('/results');
   };
 
   const logout = () => {
@@ -196,7 +212,8 @@ export default function App() {
     setGuestMode(false);
     setHistory(loadHistory());
     setBookmarks(loadBookmarks());
-    setPage('home');
+    setPitchProfile(loadPitchProfile());
+    navigate('/');
   };
 
   const saveUser = (nextUser: AuthUser) => {
@@ -217,7 +234,8 @@ export default function App() {
     setGuestMode(false);
     setHistory([]);
     setBookmarks([]);
-    setPage('home');
+    setPitchProfile(loadPitchProfile());
+    navigate('/');
   };
 
   const exportData = () => {
@@ -253,7 +271,7 @@ export default function App() {
     setSelectedSong(song);
     setSettings((current) => ({ ...current, speed: 80, practiceRange: 'custom', customStartMeasure: bookmark.startMeasure, customEndMeasure: bookmark.endMeasure, repeatCount: 3, metronomeEnabled: true }));
     setImportedChart(null);
-    setPage('practice');
+    navigate('/practice');
   };
 
   const requireAuthentication = !user && !guestMode;
@@ -271,64 +289,110 @@ export default function App() {
 
         {/* Pages */}
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
-          {requireAuthentication && <AuthPage onAuthenticated={authenticate} onGuest={activateGuest} />}
-          {!requireAuthentication && page === 'home' && (
-            <HomePage
-              songs={SONGS}
-              history={history}
-              user={user}
-              onAccount={() => setPage('account')}
-              onLearning={() => setPage('learning')}
-              onSelect={(s) => { setSelectedSong(s); setImportedChart(null); setPage('prep'); }}
-            />
-          )}
-          {!requireAuthentication && page === 'prep' && (
-            <PrepPage
-              song={selectedSong}
-              onBack={() => setPage('home')}
-              onStart={(nextSettings, nextImportedChart) => { setSettings(nextSettings); setImportedChart(nextImportedChart ?? null); setPage('practice'); }}
-            />
-          )}
-          {!requireAuthentication && page === 'practice' && (
-            <PracticePage
-              song={selectedSong}
-              settings={settings}
-              importedChart={importedChart ?? undefined}
-              onBack={() => setPage('prep')}
-              onFinish={finishPractice}
-            />
-          )}
-          {!requireAuthentication && page === 'results' && results && (
-            <ResultsPage
-              results={results}
-              song={selectedSong}
-              onBookmarkWeakMeasure={bookmarkWeakMeasure}
-              onRetry={() => setPage('practice')}
-              onHome={() => setPage('home')}
-            />
-          )}
-          {!requireAuthentication && page === 'account' && (
-            <AccountPage
-              user={user}
-              historyCount={history.length}
-              onBack={() => setPage('home')}
-              onSave={saveUser}
-              onLogout={logout}
-              onCreateAccount={() => { window.localStorage.removeItem(GUEST_MODE_KEY); setGuestMode(false); setPage('home'); }}
-              onDelete={deleteAccount}
-              onExport={exportData}
-            />
-          )}
-          {!requireAuthentication && page === 'learning' && (
-            <LearningPage
-              user={user}
-              songs={SONGS}
-              history={history}
-              bookmarks={bookmarks}
-              onBack={() => setPage('home')}
-              onSelectSong={(song) => { setSelectedSong(song); setImportedChart(null); setPage('prep'); }}
-              onPracticeBookmark={practiceBookmark}
-            />
+          {requireAuthentication ? (
+            <AuthPage onAuthenticated={authenticate} onGuest={activateGuest} />
+          ) : (
+            <Routes>
+              <Route
+                path="/"
+                element={(
+                  <HomePage
+                    songs={SONGS}
+                    history={history}
+                    user={user}
+                    onAccount={() => navigate('/account')}
+                    onLearning={() => navigate('/learning')}
+                    onCalibrate={() => navigate('/calibration')}
+                    onSelect={(song) => { setSelectedSong(song); setImportedChart(null); navigate(`/prep/${song.id}`); }}
+                  />
+                )}
+              />
+              <Route
+                path="/prep/:songId"
+                element={(
+                  <PrepRoute
+                    onBack={() => navigate('/')}
+                    pitchProfile={pitchProfile}
+                    onCalibrate={() => navigate('/calibration')}
+                    onSelectedSongChange={setSelectedSong}
+                    onStart={(nextSettings, nextImportedChart) => {
+                      setSettings(nextSettings);
+                      setImportedChart(nextImportedChart ?? null);
+                      navigate('/practice');
+                    }}
+                  />
+                )}
+              />
+              <Route
+                path="/practice"
+                element={(
+                  <PracticePage
+                    song={selectedSong}
+                    settings={settings}
+                    importedChart={importedChart ?? undefined}
+                    pitchProfile={pitchProfile}
+                    onBack={() => navigate(`/prep/${selectedSong.id}`)}
+                    onFinish={finishPractice}
+                  />
+                )}
+              />
+              <Route
+                path="/calibration"
+                element={(
+                  <CalibrationPage
+                    song={selectedSong}
+                    userId={user?.id}
+                    onBack={() => navigate(`/prep/${selectedSong.id}`)}
+                    onComplete={(profile) => {
+                      setPitchProfile(profile);
+                      navigate(`/prep/${selectedSong.id}`);
+                    }}
+                  />
+                )}
+              />
+              <Route
+                path="/results"
+                element={results ? (
+                  <ResultsPage
+                    results={results}
+                    song={selectedSong}
+                    onBookmarkWeakMeasure={bookmarkWeakMeasure}
+                    onRetry={() => navigate('/practice')}
+                    onHome={() => navigate('/')}
+                  />
+                ) : <Navigate to="/" replace />}
+              />
+              <Route
+                path="/account"
+                element={(
+                  <AccountPage
+                    user={user}
+                    historyCount={history.length}
+                    onBack={() => navigate('/')}
+                    onSave={saveUser}
+                    onLogout={logout}
+                    onCreateAccount={() => { window.localStorage.removeItem(GUEST_MODE_KEY); setGuestMode(false); navigate('/'); }}
+                    onDelete={deleteAccount}
+                    onExport={exportData}
+                  />
+                )}
+              />
+              <Route
+                path="/learning"
+                element={(
+                  <LearningPage
+                    user={user}
+                    songs={SONGS}
+                    history={history}
+                    bookmarks={bookmarks}
+                    onBack={() => navigate('/')}
+                    onSelectSong={(song) => { setSelectedSong(song); setImportedChart(null); navigate(`/prep/${song.id}`); }}
+                    onPracticeBookmark={practiceBookmark}
+                  />
+                )}
+              />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
           )}
         </div>
 
@@ -337,4 +401,27 @@ export default function App() {
       </div>
     </main>
   );
+}
+
+function PrepRoute({
+  onBack,
+  pitchProfile,
+  onCalibrate,
+  onSelectedSongChange,
+  onStart,
+}: {
+  onBack: () => void;
+  pitchProfile: ReturnType<typeof loadPitchProfile>;
+  onCalibrate: () => void;
+  onSelectedSongChange: (song: Song) => void;
+  onStart: (settings: PracticeSettings, importedChart?: PracticeChart) => void;
+}) {
+  const { songId } = useParams();
+  const song = getSongById(songId);
+
+  useEffect(() => {
+    onSelectedSongChange(song);
+  }, [onSelectedSongChange, song]);
+
+  return <PrepPage song={song} pitchProfile={pitchProfile} onBack={onBack} onStart={onStart} onCalibrate={onCalibrate} />;
 }

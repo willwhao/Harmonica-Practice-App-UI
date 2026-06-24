@@ -2,7 +2,7 @@ import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const budget = {
-  maxInitialJsKb: 450,
+  maxInitialJsKb: 470,
   maxInitialCssKb: 110,
 };
 

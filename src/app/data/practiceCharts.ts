@@ -1,3 +1,5 @@
+import { migrateChart as migrateEngineChart, validatePracticeChart as validateEnginePracticeChart } from '../../engine/chartValidation.ts';
+
 export type BreathDirection = 'blow' | 'draw';
 export type HarmonicaKind = 'diatonic' | 'chromatic';
 export type HarmonicaTechnique = 'natural' | 'bend-half' | 'bend-whole' | 'overblow' | 'slide';
@@ -121,36 +123,11 @@ function createChart(blueprint: ChartBlueprint): PracticeChart {
 }
 
 export function validatePracticeChart(chart: PracticeChart): ChartValidationResult {
-  const issues: string[] = [];
-  if (chart.schemaVersion !== 2) issues.push('schemaVersion 必须为 2');
-  if (!chart.id || !chart.songId || !chart.title) issues.push('id、songId 和 title 不能为空');
-  if (!Number.isInteger(chart.version) || chart.version < 1) issues.push('version 必须为正整数');
-  if (chart.measures.length === 0 || chart.measures.some((measure) => measure.length !== 4)) issues.push('每个谱面必须包含四拍小节');
-  if (chart.totalBeats !== chart.measures.length * 4) issues.push('totalBeats 与小节数量不一致');
-  let previousBeat = -1;
-  chart.notes.forEach((note, index) => {
-    if (note.beat < 0 || note.beat >= chart.totalBeats) issues.push(`音符 ${index} 的 beat 越界`);
-    if (!Number.isFinite(note.durationBeats) || note.durationBeats <= 0) issues.push(`音符 ${index} 的 durationBeats 无效`);
-    if (note.beat + note.durationBeats > chart.totalBeats) issues.push(`音符 ${index} 的长音越过谱面结尾`);
-    if (note.beat <= previousBeat) issues.push(`音符 ${index} 未按 beat 严格递增`);
-    if (note.hole < 1 || note.hole > (chart.harmonicaType === 'chromatic' ? 12 : 10)) issues.push(`音符 ${index} 的孔位无效`);
-    const expectedTrack = note.hole - 1;
-    if (note.track !== expectedTrack) issues.push(`音符 ${index} 的轨道必须与孔位一致`);
-    if (!chart.noteFrequencies[note.number] || !chart.noteNames[note.number]) issues.push(`音符 ${index} 缺少频率或音名映射`);
-    if (chart.harmonicaType === 'diatonic' && note.technique === 'slide') issues.push(`十孔谱音符 ${index} 不能使用半音阶滑键`);
-    previousBeat = note.beat;
-  });
-  return { valid: issues.length === 0, issues };
+  return validateEnginePracticeChart(chart);
 }
 
 export function migrateChart(input: PracticeChart | LegacyPracticeChart): PracticeChart {
-  if ('schemaVersion' in input && input.schemaVersion === 2) return input as PracticeChart;
-  return {
-    ...input,
-    schemaVersion: 2,
-    source: 'practice-arrangement',
-    notes: input.notes.map((note) => ({ ...note, durationBeats: note.durationBeats ?? 1, technique: note.technique ?? 'natural' })),
-  } as PracticeChart;
+  return migrateEngineChart(input);
 }
 
 const C_DIATONIC: Record<string, NoteDefinition> = {
@@ -174,6 +151,17 @@ const G_DIATONIC: Record<string, NoteDefinition> = {
   '6': { frequency: 329.63, name: 'E4', track: 4, hole: 5, type: 'draw' },
   '7': { frequency: 369.99, name: 'F#4', track: 5, hole: 6, type: 'draw' },
   '1̇': { frequency: 392, name: 'G4', track: 5, hole: 6, type: 'blow' },
+};
+
+const F_DIATONIC: Record<string, NoteDefinition> = {
+  '1': { frequency: 174.61, name: 'F3', track: 2, hole: 3, type: 'blow' },
+  '2': { frequency: 196, name: 'G3', track: 2, hole: 3, type: 'draw' },
+  '3': { frequency: 220, name: 'A3', track: 3, hole: 4, type: 'blow' },
+  '4': { frequency: 233.08, name: 'A#3', track: 3, hole: 4, type: 'draw' },
+  '5': { frequency: 261.63, name: 'C4', track: 4, hole: 5, type: 'blow' },
+  '6': { frequency: 293.66, name: 'D4', track: 4, hole: 5, type: 'draw' },
+  '7': { frequency: 329.63, name: 'E4', track: 5, hole: 6, type: 'draw' },
+  '1̇': { frequency: 349.23, name: 'F4', track: 5, hole: 6, type: 'blow' },
 };
 
 const D_CHROMATIC: Record<string, NoteDefinition> = {
@@ -203,9 +191,29 @@ const BLUEPRINTS: ChartBlueprint[] = [
     ['3','3','4','5'], ['5','4','3','2'], ['1','3','2','4'], ['3','-','-','-'],
     ['5','6','5','3'], ['4','5','4','2'], ['3','4','5','2'], ['1:3','-','-','-'],
   ] },
+  { songId: '4', title: '让我们荡起双桨·换气练习编配', key: 'F', harmonicaType: 'diatonic', definitions: F_DIATONIC, measures: [
+    ['5','5','6','5'], ['3','2','1:2','-'], ['2','3','4','5'], ['6:2','5','-','-'],
+    ['5','6','1̇','6'], ['5','4','3','2'], ['3','4','5','3'], ['2:3','-','-','-'],
+    ['1','2','3','5'], ['4','3','2','1'], ['2','3','5','6'], ['5:3','-','-','-'],
+  ] },
+  { songId: '5', title: 'Amazing Grace·长音控制编配', key: 'G', harmonicaType: 'diatonic', definitions: G_DIATONIC, measures: [
+    ['1:2','3','5:2','-'], ['3','5','6:3','-'], ['5','6','1̇:2','6'], ['5:3','-','-','-'],
+    ['3:2','5','6','-'], ['5','3','2:2','-'], ['1','3','5','3'], ['1:3','-','-','-'],
+    ['5:2','6','1̇','-'], ['6','5','3','2'], ['1','2','3','5'], ['3:3','-','-','-'],
+  ] },
+  { songId: '6', title: '外婆的澎湖湾·切分节奏编配', key: 'C', harmonicaType: 'diatonic', definitions: C_DIATONIC, measures: [
+    ['3','3','5','6'], ['5','3','2:2','-'], ['1','2','3','5'], ['6','5','3','2'],
+    ['3','5','6','1̇'], ['6','5','3','2'], ['1','2','3','2'], ['1:3','-','-','-'],
+    ['5','5','6','5'], ['3','2','1','2'], ['3','4','5','3'], ['2:3','-','-','-'],
+  ] },
   { songId: '7', title: '故乡的原风景·半音阶技巧练习', key: 'D', harmonicaType: 'chromatic', definitions: D_CHROMATIC, measures: [
     ['1','2','3','5:2'], ['4','3','2','1'], ['3','4','5','6'], ['5:2','-','4','-'],
     ['5','6','7','1̇:2'], ['7','6','5','3'], ['4','3','2','1'], ['1:3','-','-','-'],
+  ] },
+  { songId: '8', title: '夜空中最亮的星·高音区练习编配', key: 'G', harmonicaType: 'diatonic', definitions: G_DIATONIC, measures: [
+    ['5','6','1̇','1̇:2'], ['7','6','5','3'], ['3','5','6','5'], ['3:2','2','-','-'],
+    ['1','2','3','5'], ['6','5','3','2'], ['3','5','6','1̇'], ['6:3','-','-','-'],
+    ['5','6','1̇','7'], ['6','5','3','2'], ['1','3','5','6'], ['5:3','-','-','-'],
   ] },
 ];
 
