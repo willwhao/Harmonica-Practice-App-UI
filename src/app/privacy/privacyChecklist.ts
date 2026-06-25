@@ -34,8 +34,8 @@ export function getPrivacyChecklist(): PrivacyChecklistItem[] {
     {
       id: 'formal-legal-docs',
       label: '正式隐私政策与用户协议',
-      status: 'planned',
-      detail: '正式发布前仍需补充完整法律文本、版本号和生效日期。',
+      status: 'implemented',
+      detail: '已提供版本化隐私政策与用户协议文本，并在账户页提供查看入口。',
     },
   ];
 }

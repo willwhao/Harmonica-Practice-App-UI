@@ -9,13 +9,17 @@ import { AuthPage } from './components/AuthPage';
 import { AccountPage } from './components/AccountPage';
 import { LearningPage } from './components/LearningPage';
 import { CalibrationPage } from './components/CalibrationPage';
+import { OnboardingPage } from './components/OnboardingPage';
+import { LegalPage } from './components/LegalPage';
 import { SONGS } from './data';
-import type { AuthUser, GameResults, PracticeBookmark, PracticeHistoryEntry, PracticeSettings, Song } from './types';
+import type { AuthUser, GameResults, LearningTrackProgress, PracticeBookmark, PracticeHistoryEntry, PracticeSettings, Song } from './types';
 import type { PracticeChart } from './data/practiceCharts';
 import { deleteLocalAccount, getLocalUserExport, loadSessionUser, logoutLocalAccount, updateLocalUser } from './auth/authStore';
 import { summarizeWeakMeasures } from './practice/practiceInsights';
 import { loadPitchProfile } from './practice/pitchProfile';
-import { deleteCloudAccount, isCloudMode, logoutCloudAccount, refreshCloudSession, syncCloudHistory, updateCloudUser } from './cloud/cloudClient';
+import { createOnboardingProfile, hasCompletedOnboarding, saveOnboardingProfile, type OnboardingProfile } from './onboarding/onboardingProfile';
+import { deleteCloudAccount, isCloudMode, logoutCloudAccount, refreshCloudSession, syncCloudHistory, syncCloudLearning, updateCloudUser } from './cloud/cloudClient';
+import { getLearningTrackProgress } from './learning/learningStats';
 
 const GUEST_HISTORY_KEY = 'harmonica-practice-history';
 const GUEST_MODE_KEY = 'harmonica-guest-mode';
@@ -129,14 +133,31 @@ function AppRoutes() {
   const [importedChart, setImportedChart] = useState<PracticeChart | null>(null);
   const [history, setHistory] = useState<PracticeHistoryEntry[]>(() => loadHistory(isCloudMode() ? undefined : loadSessionUser()?.id));
   const [bookmarks, setBookmarks] = useState<PracticeBookmark[]>(() => loadBookmarks(isCloudMode() ? undefined : loadSessionUser()?.id));
+  const [learningProgress, setLearningProgress] = useState<LearningTrackProgress[]>(() => getLearningTrackProgress(loadHistory(isCloudMode() ? undefined : loadSessionUser()?.id)));
   const [pitchProfile, setPitchProfile] = useState(() => loadPitchProfile(isCloudMode() ? undefined : loadSessionUser()?.id));
+  const [onboardingCompleted, setOnboardingCompleted] = useState(() => hasCompletedOnboarding(isCloudMode() ? undefined : loadSessionUser()?.id));
+
+  const syncLearningState = (nextBookmarks: PracticeBookmark[], nextHistory: PracticeHistoryEntry[], activeUser = user) => {
+    const nextProgress = getLearningTrackProgress(nextHistory);
+    setLearningProgress(nextProgress);
+    if (!activeUser || !isCloudMode()) return;
+    void syncCloudLearning(nextBookmarks, nextProgress).then((synced) => {
+      saveBookmarks(synced.bookmarks, activeUser.id);
+      setBookmarks(synced.bookmarks);
+      setLearningProgress(synced.progress);
+    }).catch(() => {
+      // Local learning data remains available and will retry in the next authenticated session.
+    });
+  };
 
   const activateGuest = () => {
     window.localStorage.setItem(GUEST_MODE_KEY, 'true');
     setGuestMode(true);
     setHistory(loadHistory());
     setBookmarks(loadBookmarks());
+    setLearningProgress(getLearningTrackProgress(loadHistory()));
     setPitchProfile(loadPitchProfile());
+    setOnboardingCompleted(hasCompletedOnboarding());
     navigate('/');
   };
 
@@ -152,12 +173,15 @@ function AppRoutes() {
     setGuestMode(false);
     setHistory(migrated);
     setBookmarks(migratedBookmarks);
+    setLearningProgress(getLearningTrackProgress(migrated));
     setPitchProfile(loadPitchProfile(nextUser.id));
+    setOnboardingCompleted(hasCompletedOnboarding(nextUser.id));
     navigate('/');
     if (isCloudMode()) {
       void syncCloudHistory(migrated).then((synced) => {
         saveHistory(synced, nextUser.id);
         setHistory(synced);
+        syncLearningState(migratedBookmarks, synced, nextUser);
       }).catch(() => {
         // Keep the local cache usable while the cloud is temporarily unavailable.
       });
@@ -195,10 +219,12 @@ function AppRoutes() {
         void syncCloudHistory(next).then((synced) => {
           saveHistory(synced, user.id);
           setHistory(synced);
+          syncLearningState(bookmarks, synced, user);
         }).catch(() => {
           // The unsynced local entry will retry at the next authenticated session.
         });
       }
+      syncLearningState(bookmarks, next);
       return next;
     });
     navigate('/results');
@@ -212,7 +238,9 @@ function AppRoutes() {
     setGuestMode(false);
     setHistory(loadHistory());
     setBookmarks(loadBookmarks());
+    setLearningProgress(getLearningTrackProgress(loadHistory()));
     setPitchProfile(loadPitchProfile());
+    setOnboardingCompleted(hasCompletedOnboarding());
     navigate('/');
   };
 
@@ -234,8 +262,39 @@ function AppRoutes() {
     setGuestMode(false);
     setHistory([]);
     setBookmarks([]);
+    setLearningProgress(getLearningTrackProgress([]));
     setPitchProfile(loadPitchProfile());
+    setOnboardingCompleted(hasCompletedOnboarding());
     navigate('/');
+  };
+
+  const completeOnboarding = (profile: OnboardingProfile) => {
+    saveOnboardingProfile(profile, user?.id);
+    setOnboardingCompleted(true);
+    setSettings((current) => ({ ...current, harmonicaType: profile.defaultHarmonica }));
+    if (user) {
+      const nextUser = {
+        ...user,
+        preferences: {
+          ...user.preferences,
+          defaultHarmonica: profile.defaultHarmonica,
+          dailyGoalMinutes: profile.dailyGoalMinutes,
+          skillLevel: profile.skillLevel,
+        },
+      };
+      saveUser(nextUser);
+    }
+    navigate('/');
+  };
+
+  const skipOnboarding = () => {
+    completeOnboarding(createOnboardingProfile({
+      goal: 'daily-habit',
+      defaultHarmonica: user?.preferences.defaultHarmonica ?? settings.harmonicaType,
+      dailyGoalMinutes: user?.preferences.dailyGoalMinutes ?? 15,
+      skillLevel: user?.preferences.skillLevel ?? 'beginner',
+      deviceChecklist: { quietRoom: false, micPermission: false, headphones: false },
+    }));
   };
 
   const exportData = () => {
@@ -261,6 +320,7 @@ function AppRoutes() {
     setBookmarks((current) => {
       const next = [nextBookmark, ...current.filter((item) => item.id !== nextBookmark.id)].slice(0, 20);
       saveBookmarks(next, user?.id);
+      syncLearningState(next, history);
       return next;
     });
   };
@@ -275,6 +335,7 @@ function AppRoutes() {
   };
 
   const requireAuthentication = !user && !guestMode;
+  const shouldShowOnboarding = !requireAuthentication && !onboardingCompleted && history.length === 0;
 
   return (
     <main className="app-stage">
@@ -291,6 +352,12 @@ function AppRoutes() {
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
           {requireAuthentication ? (
             <AuthPage onAuthenticated={authenticate} onGuest={activateGuest} />
+          ) : shouldShowOnboarding ? (
+            <OnboardingPage
+              initialPreferences={user?.preferences}
+              onComplete={completeOnboarding}
+              onSkip={skipOnboarding}
+            />
           ) : (
             <Routes>
               <Route
@@ -351,6 +418,16 @@ function AppRoutes() {
                 )}
               />
               <Route
+                path="/onboarding"
+                element={(
+                  <OnboardingPage
+                    initialPreferences={user?.preferences}
+                    onComplete={completeOnboarding}
+                    onSkip={skipOnboarding}
+                  />
+                )}
+              />
+              <Route
                 path="/results"
                 element={results ? (
                   <ResultsPage
@@ -374,8 +451,13 @@ function AppRoutes() {
                     onCreateAccount={() => { window.localStorage.removeItem(GUEST_MODE_KEY); setGuestMode(false); navigate('/'); }}
                     onDelete={deleteAccount}
                     onExport={exportData}
+                    onLegal={(type) => navigate(`/legal/${type}`)}
                   />
                 )}
+              />
+              <Route
+                path="/legal/:type"
+                element={<LegalRoute onBack={() => navigate('/account')} />}
               />
               <Route
                 path="/learning"
@@ -385,6 +467,7 @@ function AppRoutes() {
                     songs={SONGS}
                     history={history}
                     bookmarks={bookmarks}
+                    learningProgress={learningProgress}
                     onBack={() => navigate('/')}
                     onSelectSong={(song) => { setSelectedSong(song); setImportedChart(null); navigate(`/prep/${song.id}`); }}
                     onPracticeBookmark={practiceBookmark}
@@ -401,6 +484,11 @@ function AppRoutes() {
       </div>
     </main>
   );
+}
+
+function LegalRoute({ onBack }: { onBack: () => void }) {
+  const { type } = useParams();
+  return <LegalPage type={type === 'terms' ? 'terms' : 'privacy'} onBack={onBack} />;
 }
 
 function PrepRoute({

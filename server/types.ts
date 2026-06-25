@@ -35,3 +35,32 @@ export interface HistoryRow extends Record<string, unknown> {
   updated_at: string;
   deleted_at: string | null;
 }
+
+export interface LearningItemRow extends Record<string, unknown> {
+  id: string;
+  user_id: string;
+  item_type: string;
+  payload_json: string;
+  revision: number;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface ContentItemRow extends Record<string, unknown> {
+  id: string;
+  content_type: string;
+  payload_json: string;
+  status: string;
+  revision: number;
+  updated_at: string;
+  published_at: string | null;
+}
+
+export interface ReleaseFlagRow extends Record<string, unknown> {
+  flag_key: string;
+  enabled: number | null;
+  rollout_percent: number;
+  note: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}

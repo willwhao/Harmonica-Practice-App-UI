@@ -61,18 +61,19 @@
 ### P2 — 中期（1~2 月）
 
 - [x] **口琴校准向导**（基础版：本地 Personal Pitch Profile + 练习判定偏移修正，见第三节）
-- [ ] 新手引导流程（目标、口琴类型、麦克风说明）
-- [ ] 书签 / 课程进度云同步
-- [ ] 错误监控（Sentry）
+- [x] 新手引导流程（基础版：目标、口琴类型、水平、每日目标、麦克风说明与设备检查）
+- [x] 书签 / 课程进度云同步（基础版：`/api/learning/sync` 同步难点书签与课程进度快照）
+- [x] 错误监控（基础版：本地缓冲 + `/api/monitoring/events` 远端接收，可替换/对接 Sentry）
 - [x] CI/CD（GitHub Actions：`typecheck + lint + test + build`，已接入统一质量门禁）
-- [ ] 正式隐私政策 / 用户协议文本
+- [x] 正式隐私政策 / 用户协议文本（v1.0.0，生效日期 2026-06-24，账户页可查看）
 
 ### P3 — 长期（多端 / 发布）
 
 - [ ] uni-app 微信小程序（音频能力分级，见第四节）
 - [ ] Capacitor 打包 Android / iOS
-- [ ] 原曲版权伴奏 + OSS + CDN
-- [ ] 运营 CMS（曲库 / 谱面管理）
+- [x] 原曲版权伴奏 + OSS + CDN（基础版：授权登记模型、CDN URL 生成与可用性门禁）
+- [x] 运营 CMS（曲库 / 谱面管理）（基础版：统一内容表、公开读取、登录写入、静态 fallback）
+- [x] 灰度发布 / 远程功能开关 / 运营报表（基础版：远程开关 API、稳定灰度桶、运营摘要 API）
 - [ ] 经验值 / 徽章 / 月报
 
 ---
@@ -355,6 +356,7 @@ Month 4+ — 多端扩展
 - [README.md](../README.md) — 功能状态与开发说明
 - [RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md) — 发布检查清单
 - [ROLLBACK_PLAN.md](./ROLLBACK_PLAN.md) — 回滚计划
+- [OPERATIONS_RELEASE_PLAN.md](./OPERATIONS_RELEASE_PLAN.md) — 灰度发布与运营报表基础版方案
 
 ---
 

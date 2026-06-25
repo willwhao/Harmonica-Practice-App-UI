@@ -2,19 +2,20 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { ArrowLeft, Award, BarChart3, Bookmark, BookOpen, CalendarDays, ChevronRight, Clock3, Flame, Target, TrendingUp } from 'lucide-react';
 import { LEARNING_TRACKS } from '../data/learningTracks';
 import { entryMinutes, getLearningSummary, getWeeklyActivity } from '../learning/learningStats';
-import type { AuthUser, PracticeBookmark, PracticeHistoryEntry, Song } from '../types';
+import type { AuthUser, LearningTrackProgress, PracticeBookmark, PracticeHistoryEntry, Song } from '../types';
 
 interface Props {
   user: AuthUser | null;
   songs: Song[];
   history: PracticeHistoryEntry[];
   bookmarks: PracticeBookmark[];
+  learningProgress?: LearningTrackProgress[];
   onBack: () => void;
   onSelectSong: (song: Song) => void;
   onPracticeBookmark: (bookmark: PracticeBookmark) => void;
 }
 
-export function LearningPage({ user, songs, history, bookmarks, onBack, onSelectSong, onPracticeBookmark }: Props) {
+export function LearningPage({ user, songs, history, bookmarks, learningProgress = [], onBack, onSelectSong, onPracticeBookmark }: Props) {
   const [tab, setTab] = useState<'plan' | 'history'>('plan');
   const summary = useMemo(() => getLearningSummary(history), [history]);
   const week = useMemo(() => getWeeklyActivity(history), [history]);
@@ -89,8 +90,9 @@ export function LearningPage({ user, songs, history, bookmarks, onBack, onSelect
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
             {LEARNING_TRACKS.map((track) => {
               const sessions = history.filter((entry) => track.songIds.includes(entry.songId)).length;
-              const progress = Math.min(100, Math.round(sessions / track.targetSessions * 100));
-              const nextSongId = track.songIds.find((songId) => !history.some((entry) => entry.songId === songId)) ?? track.songIds[sessions % track.songIds.length];
+              const cloudProgress = learningProgress.find((item) => item.trackId === track.id && !item.deletedAt);
+              const progress = cloudProgress?.progressPercent ?? Math.min(100, Math.round(sessions / track.targetSessions * 100));
+              const nextSongId = cloudProgress?.nextSongId ?? track.songIds.find((songId) => !history.some((entry) => entry.songId === songId)) ?? track.songIds[sessions % track.songIds.length];
               const nextSong = songs.find((song) => song.id === nextSongId);
               return <button key={track.id} type="button" disabled={!nextSong} onClick={() => nextSong && onSelectSong(nextSong)} style={{ border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: 14, background: `linear-gradient(135deg,${track.color}22,${track.color2}0D)`, display: 'flex', gap: 12, alignItems: 'center', textAlign: 'left', cursor: nextSong ? 'pointer' : 'default' }}><div style={{ width: 45, height: 45, borderRadius: 14, background: `linear-gradient(135deg,${track.color},${track.color2})`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><BookOpen size={19} color="white" /></div><div style={{ flex: 1, minWidth: 0 }}><div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#E2EAF8', fontSize: 13, fontWeight: 700 }}>{track.title}</span><span style={{ color: track.color2, fontSize: 9 }}>{track.level}</span></div><div style={{ color: '#6B80A8', fontSize: 9, margin: '3px 0 7px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.description}</div><div style={{ height: 4, background: 'rgba(255,255,255,0.07)', borderRadius: 2 }}><div style={{ height: '100%', width: `${progress}%`, background: track.color2, borderRadius: 2 }} /></div></div><ChevronRight size={15} color="#4A5A78" /></button>;
             })}

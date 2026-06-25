@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from 'react';
-import { ArrowLeft, CloudOff, Download, LogOut, Save, ShieldCheck, Trash2, UserRound } from 'lucide-react';
+import { ArrowLeft, CloudOff, Download, FileText, LogOut, Save, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import type { AuthUser, UserPreferences } from '../types';
 import { getPrivacyChecklist, summarizePrivacyReadiness } from '../privacy/privacyChecklist';
 import { getCompatibilityChecklist, summarizeCompatibilityReadiness } from '../compat/compatibilityChecklist';
 import { buildReleaseConfig, summarizeReleaseReadiness } from '../ops/releaseConfig';
+import { summarizeLegalReadiness } from '../legal/legalDocuments';
 
 interface Props {
   user: AuthUser | null;
@@ -14,9 +15,10 @@ interface Props {
   onCreateAccount: () => void;
   onDelete: () => void;
   onExport: () => void;
+  onLegal: (type: 'privacy' | 'terms') => void;
 }
 
-export function AccountPage({ user, historyCount, onBack, onSave, onLogout, onCreateAccount, onDelete, onExport }: Props) {
+export function AccountPage({ user, historyCount, onBack, onSave, onLogout, onCreateAccount, onDelete, onExport, onLegal }: Props) {
   const [nickname, setNickname] = useState(user?.nickname ?? '游客');
   const [preferences, setPreferences] = useState<UserPreferences>(user?.preferences ?? { defaultHarmonica: 'diatonic', dailyGoalMinutes: 15, skillLevel: 'beginner' });
   const [saved, setSaved] = useState(false);
@@ -26,6 +28,7 @@ export function AccountPage({ user, historyCount, onBack, onSave, onLogout, onCr
   const compatibilitySummary = summarizeCompatibilityReadiness(compatibilityChecklist);
   const releaseConfig = buildReleaseConfig();
   const releaseSummary = summarizeReleaseReadiness(releaseConfig);
+  const legalSummary = summarizeLegalReadiness();
 
   const save = () => {
     if (!user) return;
@@ -91,8 +94,12 @@ export function AccountPage({ user, historyCount, onBack, onSave, onLogout, onCr
             <InfoRow
               icon={<ShieldCheck size={17} />}
               title={`已完成 ${privacySummary.implemented}/${privacySummary.total} 项隐私控制`}
-              detail="上传音频与练习录音默认在本机处理；正式法律文本仍待发布前补齐。"
+              detail={`隐私政策与用户协议 v${legalSummary.version} 已准备，生效日期 ${legalSummary.effectiveDate}。`}
             />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <button type="button" onClick={() => onLegal('privacy')} style={secondaryButtonStyle}><ShieldCheck size={15} /> 隐私政策</button>
+              <button type="button" onClick={() => onLegal('terms')} style={secondaryButtonStyle}><FileText size={15} /> 用户协议</button>
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
               {privacyChecklist.map((item) => (
                 <div key={item.id} style={{ padding: '9px 10px', borderRadius: 11, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -152,7 +159,7 @@ export function AccountPage({ user, historyCount, onBack, onSave, onLogout, onCr
         </>
       )}
 
-      <div style={{ display: 'flex', gap: 8, color: '#4A5A78', fontSize: 10, lineHeight: 1.55, marginTop: 22 }}><ShieldCheck size={16} style={{ flexShrink: 0 }} />本地账户用于验证产品流程，不等同于正式云端身份系统。正式发布仍需补齐用户协议、隐私政策和版本化合规文档。</div>
+      <div style={{ display: 'flex', gap: 8, color: '#4A5A78', fontSize: 10, lineHeight: 1.55, marginTop: 22 }}><ShieldCheck size={16} style={{ flexShrink: 0 }} />本地账户用于验证产品流程。隐私政策与用户协议已提供版本化文本，正式发布时仍需由发布方按目标地区完成法律复核。</div>
     </div>
   );
 }

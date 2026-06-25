@@ -7,13 +7,75 @@ export interface MonitoringEvent {
   metadata?: Record<string, string | number | boolean | null>;
 }
 
+export interface MonitoringConfig {
+  endpoint?: string;
+  sampleRate: number;
+  release?: string;
+  environment?: string;
+}
+
+export interface MonitoringTransport {
+  send: (event: MonitoringEvent, config: MonitoringConfig) => Promise<void>;
+}
+
 const MAX_EVENTS = 50;
 const monitoringBuffer: MonitoringEvent[] = [];
+let monitoringConfig = getDefaultMonitoringConfig();
+let monitoringTransport: MonitoringTransport = {
+  send: async (event, config) => {
+    if (!config.endpoint || typeof fetch === 'undefined') return;
+    await fetch(config.endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...event,
+        release: config.release,
+        environment: config.environment,
+      }),
+      keepalive: true,
+    });
+  },
+};
+
+function getDefaultMonitoringConfig(): MonitoringConfig {
+  const meta = import.meta as unknown as { env?: Record<string, string | undefined> };
+  const env = meta.env ?? {};
+  const sampleRate = Number(env.VITE_MONITORING_SAMPLE_RATE ?? '1');
+  const remoteEnabled = !['0', 'false', 'off', 'disabled'].includes((env.VITE_FEATURE_REMOTE_MONITORING ?? '').trim().toLowerCase());
+  return {
+    endpoint: remoteEnabled ? env.VITE_MONITORING_ENDPOINT : undefined,
+    sampleRate: Number.isFinite(sampleRate) ? Math.max(0, Math.min(1, sampleRate)) : 1,
+    release: env.VITE_APP_VERSION,
+    environment: env.VITE_RELEASE_CHANNEL,
+  };
+}
+
+export function configureMonitoring(config: Partial<MonitoringConfig>, transport?: MonitoringTransport) {
+  monitoringConfig = { ...monitoringConfig, ...config };
+  if (transport) monitoringTransport = transport;
+}
+
+export function shouldReportMonitoringEvent(event: MonitoringEvent, config = monitoringConfig, random = Math.random) {
+  if (!config.endpoint) return false;
+  if (event.type === 'performance') return random() < Math.min(config.sampleRate, 0.25);
+  return random() < config.sampleRate;
+}
+
+export async function reportMonitoringEvent(event: MonitoringEvent, config = monitoringConfig) {
+  if (!shouldReportMonitoringEvent(event, config)) return false;
+  try {
+    await monitoringTransport.send(event, config);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function recordMonitoringEvent(event: Omit<MonitoringEvent, 'createdAt'>) {
   const nextEvent: MonitoringEvent = { ...event, createdAt: new Date().toISOString() };
   monitoringBuffer.unshift(nextEvent);
   monitoringBuffer.splice(MAX_EVENTS);
+  void reportMonitoringEvent(nextEvent);
   return nextEvent;
 }
 

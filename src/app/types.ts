@@ -94,6 +94,21 @@ export interface PracticeBookmark {
   endMeasure: number;
   label: string;
   createdAt: string;
+  revision?: number;
+  updatedAt?: string;
+  deletedAt?: string | null;
+}
+
+export interface LearningTrackProgress {
+  id: string;
+  trackId: string;
+  completedSessions: number;
+  targetSessions: number;
+  progressPercent: number;
+  nextSongId: string | null;
+  updatedAt: string;
+  revision?: number;
+  deletedAt?: string | null;
 }
 
 export interface UserPreferences {

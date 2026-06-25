@@ -3,6 +3,7 @@ import { ArrowLeft, Music2, Play, Headphones, Volume2, TimerReset, UploadCloud, 
 import type { PracticeSettings, Song } from '../types';
 import { getPracticeChart, type PracticeChart } from '../data/practiceCharts';
 import { getPracticeAudioAssets } from '../audio/practiceAudioAssets';
+import type { PracticeAudioAssetStatus } from '../audio/practiceAudioAssets';
 import { transcribeAudioFile, type AudioTranscription } from '../audio/audioTranscription';
 import { createPracticeChartFromTranscription } from '../audio/transcriptionChart';
 import { buildReleaseConfig, isFeatureEnabled } from '../ops/releaseConfig';
@@ -24,6 +25,20 @@ type RepeatChoice = '1' | '2' | '3';
 
 const DIFF_TEXT = ['', '初级', '中级', '高级'];
 const DIFF_COLOR = ['', '#22C55E', '#F59E0B', '#EF4444'];
+
+const AUDIO_STATUS_TEXT: Record<PracticeAudioAssetStatus, string> = {
+  available: '可用',
+  'requires-license': '需授权',
+  'license-expired': '授权过期',
+  'cdn-missing': '待配置 CDN',
+};
+
+const AUDIO_STATUS_COLOR: Record<PracticeAudioAssetStatus, string> = {
+  available: '#00C9B1',
+  'requires-license': '#F59E0B',
+  'license-expired': '#EF4444',
+  'cdn-missing': '#60A5FA',
+};
 
 function OptionGroup<T extends string>({
   label,
@@ -415,9 +430,9 @@ export function PrepPage({ song, pitchProfile, onBack, onStart, onCalibrate }: P
             <div key={asset.id} style={{ padding: '8px 10px', borderRadius: 10, background: asset.status === 'available' ? 'rgba(0,201,177,0.07)' : 'rgba(245,158,11,0.07)', border: `1px solid ${asset.status === 'available' ? 'rgba(0,201,177,0.15)' : 'rgba(245,158,11,0.14)'}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                 <span style={{ color: '#E2EAF8', fontSize: 11, fontWeight: 700 }}>{asset.label}</span>
-                <span style={{ color: asset.status === 'available' ? '#00C9B1' : '#F59E0B', fontSize: 10, fontWeight: 700 }}>{asset.status === 'available' ? '可用' : '需授权'}</span>
+                <span style={{ color: AUDIO_STATUS_COLOR[asset.status], fontSize: 10, fontWeight: 700 }}>{AUDIO_STATUS_TEXT[asset.status]}</span>
               </div>
-              <div style={{ color: '#607391', fontSize: 9, marginTop: 3 }}>{asset.source}</div>
+              <div style={{ color: '#607391', fontSize: 9, marginTop: 3 }}>{asset.source}{asset.rightsHolder ? ` · ${asset.rightsHolder}` : ''}</div>
             </div>
           ))}
         </div>

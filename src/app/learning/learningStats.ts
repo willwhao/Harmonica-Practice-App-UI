@@ -1,4 +1,5 @@
-import type { PracticeHistoryEntry } from '../types';
+import { LEARNING_TRACKS } from '../data/learningTracks.ts';
+import type { LearningTrackProgress, PracticeHistoryEntry } from '../types';
 
 export function localDateKey(value: string | Date) {
   const date = typeof value === 'string' ? new Date(value) : value;
@@ -49,4 +50,27 @@ export function getLearningSummary(history: PracticeHistoryEntry[], now = new Da
     todayMinutes: todayEntries.reduce((total, entry) => total + entryMinutes(entry), 0),
     streak: calculateStreak(history, now),
   };
+}
+
+export function getLearningTrackProgress(history: PracticeHistoryEntry[], now = new Date()): LearningTrackProgress[] {
+  const updatedAt = now.toISOString();
+  return LEARNING_TRACKS.map((track) => {
+    const entries = history.filter((entry) => !entry.deletedAt && track.songIds.includes(entry.songId));
+    const completedSessions = entries.length;
+    const progressPercent = Math.min(100, Math.round(completedSessions / track.targetSessions * 100));
+    const nextSongId = track.songIds.find((songId) => !entries.some((entry) => entry.songId === songId))
+      ?? track.songIds[completedSessions % track.songIds.length]
+      ?? null;
+    return {
+      id: track.id,
+      trackId: track.id,
+      completedSessions,
+      targetSessions: track.targetSessions,
+      progressPercent,
+      nextSongId,
+      updatedAt,
+      revision: 0,
+      deletedAt: null,
+    };
+  });
 }

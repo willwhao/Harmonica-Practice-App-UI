@@ -107,6 +107,38 @@ export async function createDatabase(filename?: string) {
       PRIMARY KEY (id, user_id)
     );
     CREATE INDEX IF NOT EXISTS idx_history_user_updated ON practice_history(user_id, updated_at);
+    CREATE TABLE IF NOT EXISTS learning_items (
+      id TEXT NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      item_type TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      revision INTEGER NOT NULL,
+      updated_at TEXT NOT NULL,
+      deleted_at TEXT,
+      PRIMARY KEY (id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_learning_items_user_updated ON learning_items(user_id, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_learning_items_user_type ON learning_items(user_id, item_type);
+    CREATE TABLE IF NOT EXISTS content_items (
+      id TEXT NOT NULL,
+      content_type TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      status TEXT NOT NULL,
+      revision INTEGER NOT NULL,
+      updated_at TEXT NOT NULL,
+      published_at TEXT,
+      PRIMARY KEY (id, content_type)
+    );
+    CREATE INDEX IF NOT EXISTS idx_content_items_type_status ON content_items(content_type, status);
+    CREATE INDEX IF NOT EXISTS idx_content_items_updated ON content_items(updated_at);
+    CREATE TABLE IF NOT EXISTS release_flags (
+      flag_key TEXT PRIMARY KEY,
+      enabled INTEGER,
+      rollout_percent INTEGER NOT NULL,
+      note TEXT,
+      updated_at TEXT NOT NULL,
+      updated_by TEXT
+    );
     CREATE INDEX IF NOT EXISTS idx_refresh_token ON refresh_sessions(token_hash);
   `);
   return database;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { calculateStreak, getLearningSummary, getWeeklyActivity } from './learningStats.ts';
+import { calculateStreak, getLearningSummary, getLearningTrackProgress, getWeeklyActivity } from './learningStats.ts';
 import type { PracticeHistoryEntry } from '../types.ts';
 
 const entry = (day: number, accuracy = 80, durationSeconds = 180): PracticeHistoryEntry => ({
@@ -25,4 +25,17 @@ test('builds weekly activity and summary metrics', () => {
   assert.equal(summary.averageAccuracy, 80);
   assert.equal(summary.todayMinutes, 4);
   assert.equal(summary.bestScore, 2200);
+});
+
+test('builds course progress snapshots from practice history', () => {
+  const history = [
+    { ...entry(21), songId: '1' },
+    { ...entry(22), songId: '2' },
+  ];
+  const progress = getLearningTrackProgress(history, new Date(2026, 5, 24, 18));
+  const beginner = progress.find((item) => item.trackId === 'foundation');
+  assert.ok(beginner);
+  assert.equal(beginner.completedSessions, 2);
+  assert.equal(beginner.progressPercent, 33);
+  assert.equal(beginner.nextSongId, '5');
 });
