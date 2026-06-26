@@ -440,26 +440,64 @@ export function PracticePage({ song, settings, importedChart, pitchProfile, onBa
           {hasPitch && pitchSample ? pitchSample.note : targetMidi}
         </span>
         <span style={{ color: '#4A5A78', fontSize: 10 }}>→</span>
-        {/* Tuning bar */}
-        <div style={{ flex: 1, position: 'relative', height: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 3 }}>
-          <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.2)' }} />
+        {/* Tuning meter */}
+        <div
+          aria-label="音准偏差指示"
+          style={{
+            flex: 1,
+            position: 'relative',
+            height: 12,
+            borderRadius: 999,
+            background: 'linear-gradient(90deg,rgba(245,158,11,0.12),rgba(255,255,255,0.1) 38%,rgba(0,201,177,0.18) 50%,rgba(255,255,255,0.1) 62%,rgba(245,158,11,0.12))',
+            border: '1px solid rgba(255,255,255,0.08)',
+            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.35)',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ position: 'absolute', left: '50%', top: 1, bottom: 1, width: 2, borderRadius: 2, background: '#00C9B1', boxShadow: '0 0 8px rgba(0,201,177,0.75)' }} />
+          {[-24, -12, 12, 24].map((tick) => (
+            <div
+              key={tick}
+              style={{
+                position: 'absolute',
+                left: `calc(50% + ${tick}px)`,
+                top: 3,
+                bottom: 3,
+                width: 1,
+                background: 'rgba(255,255,255,0.18)',
+              }}
+            />
+          ))}
           {hasPitch && (
             <div
               style={{
                 position: 'absolute',
-                top: 0,
-                height: '100%',
-                width: 6,
-                borderRadius: 3,
+                top: 1,
+                bottom: 1,
+                width: 8,
+                borderRadius: 999,
                 background: Math.abs(tuningDev) < 8 ? '#00C9B1' : '#FF6B9D',
                 left: `calc(50% + ${tuningPosition}px)`,
                 transform: 'translateX(-50%)',
-                transition: 'left 0.2s',
+                transition: 'left 0.16s ease',
+                boxShadow: `0 0 10px ${Math.abs(tuningDev) < 8 ? 'rgba(0,201,177,0.75)' : 'rgba(255,107,157,0.75)'}`,
               }}
             />
           )}
           {!hasPitch && microphoneActive && (
-            <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${inputLevel}%`, maxWidth: '100%', borderRadius: 3, background: inputLevel <= noiseFloor ? '#4A5A78' : '#60A5FA', transition: 'width 0.1s' }} />
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                height: '100%',
+                width: `${inputLevel}%`,
+                maxWidth: '100%',
+                borderRadius: 999,
+                background: inputLevel <= noiseFloor ? 'rgba(74,90,120,0.75)' : 'rgba(96,165,250,0.55)',
+                transition: 'width 0.1s',
+              }}
+            />
           )}
         </div>
         <span style={{ color: tuningDev > 0 ? '#F59E0B' : tuningDev < 0 ? '#F59E0B' : '#22C55E', fontSize: 10, minWidth: 28, textAlign: 'right' }}>

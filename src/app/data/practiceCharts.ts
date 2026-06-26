@@ -12,12 +12,15 @@ export interface PracticeNote {
   type: BreathDirection;
   hole: number;
   technique: HarmonicaTechnique;
+  lyric?: string;
 }
 
 export interface ScoreBeat {
   n: string;
   t: BreathDirection | 'rest';
+  durationBeats?: number;
   technique?: HarmonicaTechnique;
+  lyric?: string;
 }
 
 export interface PracticeChart {
@@ -58,6 +61,7 @@ interface ChartBlueprint {
   harmonicaType: HarmonicaKind;
   definitions: Record<string, NoteDefinition>;
   measures: string[][];
+  lyrics?: string[][];
 }
 
 type LegacyPracticeNote = Omit<PracticeNote, 'durationBeats' | 'technique'> & {
@@ -83,12 +87,13 @@ function parseScoreToken(token: string) {
 }
 
 function createChart(blueprint: ChartBlueprint): PracticeChart {
-  const scoreMeasures = blueprint.measures.map((measure) => measure.map((token): ScoreBeat => {
+  const scoreMeasures = blueprint.measures.map((measure, measureIndex) => measure.map((token, beatIndex): ScoreBeat => {
     const parsed = parseScoreToken(token);
-    if (parsed.number === REST) return { n: REST, t: 'rest' };
+    const lyric = blueprint.lyrics?.[measureIndex]?.[beatIndex];
+    if (parsed.number === REST) return { n: REST, t: 'rest', durationBeats: parsed.durationBeats, lyric };
     const definition = blueprint.definitions[parsed.number];
     if (!definition) throw new Error(`谱面 ${blueprint.songId} 使用了未定义音符 ${parsed.number}`);
-    return { n: parsed.number, t: definition.type, technique: definition.technique ?? 'natural' };
+    return { n: parsed.number, t: definition.type, durationBeats: parsed.durationBeats, technique: definition.technique ?? 'natural', lyric };
   }));
   const notes = blueprint.measures.flatMap((measure, measureIndex) => measure.flatMap((token, beatIndex) => {
     const parsed = parseScoreToken(token);
@@ -102,6 +107,7 @@ function createChart(blueprint: ChartBlueprint): PracticeChart {
       type: definition.type,
       hole: definition.hole,
       technique: definition.technique ?? 'natural',
+      lyric: blueprint.lyrics?.[measureIndex]?.[beatIndex],
     }];
   }));
   return {

@@ -52,7 +52,7 @@ export function getFallingNoteGeometry({
 }) {
   const beatsUntilStart = note.beat - currentBeat;
   const startY = judgmentY - beatsUntilStart * beatHeight;
-  const durationHeight = Math.max(66, note.durationBeats * beatHeight);
+  const durationHeight = Math.max(24, note.durationBeats * beatHeight);
   const centerX = (getNoteTrackIndex(note) + 0.5) * trackWidth;
   return { startY, durationHeight, centerX };
 }

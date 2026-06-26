@@ -12,6 +12,20 @@ const FEEDBACK_COLORS: Record<NoteJudgment, string> = {
   Miss: '#6B7280',
 };
 
+const FEEDBACK_LABELS: Record<NoteJudgment, string> = {
+  Perfect: '完美！',
+  Great: '太棒！',
+  Good: '不错',
+  Bad: '一般',
+  Miss: '未命中',
+};
+
+function formatDurationBeats(durationBeats: number) {
+  if (durationBeats === 0.5) return '半拍';
+  if (Number.isInteger(durationBeats)) return `${durationBeats}拍`;
+  return `${durationBeats.toFixed(1).replace(/\.0$/, '')}拍`;
+}
+
 interface PracticeNoteLaneProps {
   gameFieldRef: RefObject<HTMLDivElement | null>;
   trackCount: number;
@@ -107,7 +121,7 @@ export function PracticeNoteLane({
         </div>
       ))}
 
-      {visibleNotes.map((note) => {
+      {visibleNotes.map((note, noteIndex) => {
         const beatsUntilNote = note.beat - currentBeatFloat;
         const { startY: noteY, durationHeight, centerX: trackCenterX } = getFallingNoteGeometry({
           note,
@@ -119,7 +133,14 @@ export function PracticeNoteLane({
         const opacity = beatsUntilNote < 0 ? Math.max(0, 1 + beatsUntilNote * 2) : 1;
         const isAtJudge = Math.abs(beatsUntilNote) < 0.15;
         const color = note.type === 'blow' ? '#00C9B1' : '#FF6B9D';
-        const noteBottomGlow = note.type === 'blow' ? '#6FFFE8' : '#FFB2D2';
+        const nextSameLane = visibleNotes
+          .slice(noteIndex + 1)
+          .find((item) => item.hole === note.hole && item.beat > note.beat);
+        const maxHeightBeforeNext = nextSameLane
+          ? Math.max(24, (nextSameLane.beat - note.beat) * beatHeight - 8)
+          : durationHeight;
+        const visualHeight = Math.min(durationHeight, maxHeightBeforeNext);
+        const compact = visualHeight < 44;
 
         return (
           <div
@@ -127,15 +148,17 @@ export function PracticeNoteLane({
             style={{
               position: 'absolute',
               left: trackCenterX - noteWidth / 2,
-              top: noteY - durationHeight,
+              top: noteY - visualHeight,
               width: noteWidth,
-              height: durationHeight,
-              borderRadius: 999,
-              background: `linear-gradient(180deg, ${color}55 0%, ${color}ee 52%, ${color}ff 100%)`,
-              border: `1.5px solid ${color}`,
-              boxShadow: `0 0 ${isAtJudge ? 24 : 12}px ${color}${isAtJudge ? 'dd' : '88'}, inset 0 10px 16px rgba(255,255,255,0.18), inset 0 -10px 14px rgba(0,0,0,0.16)`,
+              height: visualHeight,
+              borderRadius: 0,
+              background: `linear-gradient(180deg, ${color}44 0%, ${color}dd 38%, ${color}ff 100%)`,
+              border: `1px solid ${color}`,
+              borderTop: `3px solid ${color}`,
+              borderBottom: `3px solid ${color}`,
+              boxShadow: `0 0 ${isAtJudge ? 22 : 10}px ${color}${isAtJudge ? 'cc' : '66'}, inset 0 8px 12px rgba(255,255,255,0.14), inset 0 -8px 12px rgba(0,0,0,0.14)`,
               opacity,
-              transform: `scale(${isAtJudge ? 1.04 : 1})`,
+              transform: `scaleX(${isAtJudge ? 1.04 : 1})`,
               transition: 'box-shadow 0.1s, transform 0.1s',
               display: 'flex',
               flexDirection: 'column',
@@ -143,26 +166,15 @@ export function PracticeNoteLane({
               justifyContent: 'center',
             }}
           >
-            <span style={{ fontSize: 15, fontWeight: 850, color: 'white', lineHeight: 1, letterSpacing: '-0.5px', textShadow: '0 1px 4px rgba(0,0,0,0.24)' }}>
+            <span style={{ fontSize: compact ? 13 : 15, fontWeight: 850, color: 'white', lineHeight: 1, letterSpacing: '-0.5px', textShadow: '0 1px 4px rgba(0,0,0,0.24)' }}>
               {note.number}
             </span>
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.9)', lineHeight: 1, marginTop: 3 }}>
+            <span style={{ fontSize: compact ? 8 : 10, color: 'rgba(255,255,255,0.9)', lineHeight: 1, marginTop: compact ? 1 : 3 }}>
               {note.type === 'blow' ? '↑' : '↓'}
             </span>
-            <div
-              style={{
-                position: 'absolute',
-                left: '50%',
-                bottom: -5,
-                transform: 'translateX(-50%)',
-                width: Math.max(20, noteWidth * 0.52),
-                height: 7,
-                borderRadius: 999,
-                background: noteBottomGlow,
-                boxShadow: `0 0 14px ${color}`,
-                opacity: 0.9,
-              }}
-            />
+            <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.78)', lineHeight: 1, marginTop: 2 }}>
+              {formatDurationBeats(note.durationBeats)}
+            </span>
           </div>
         );
       })}
@@ -199,25 +211,25 @@ export function PracticeNoteLane({
       {feedback && (
         <div
           key={feedbackKey}
-            style={{
-              position: 'absolute',
-              left: '50%',
-              top: judgmentY - 44,
-              transform: 'translateX(-50%)',
-              padding: '4px 18px',
-              borderRadius: 20,
-              background: `${FEEDBACK_COLORS[feedback]}22`,
-              border: `1.5px solid ${FEEDBACK_COLORS[feedback]}88`,
-              color: FEEDBACK_COLORS[feedback],
-              fontSize: 14,
-              fontWeight: 800,
-              letterSpacing: '1px',
-              pointerEvents: 'none',
-              whiteSpace: 'nowrap',
-              boxShadow: `0 4px 20px ${FEEDBACK_COLORS[feedback]}44`,
-            }}
-          >
-            {feedback === 'Perfect' ? '完美！' : feedback === 'Great' ? '太棒！' : feedback === 'Good' ? '不错' : feedback === 'Bad' ? '一般' : '未命中'}
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: judgmentY - 44,
+            transform: 'translateX(-50%)',
+            padding: '4px 18px',
+            borderRadius: 20,
+            background: `${FEEDBACK_COLORS[feedback]}22`,
+            border: `1.5px solid ${FEEDBACK_COLORS[feedback]}88`,
+            color: FEEDBACK_COLORS[feedback],
+            fontSize: 14,
+            fontWeight: 800,
+            letterSpacing: '1px',
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+            boxShadow: `0 4px 20px ${FEEDBACK_COLORS[feedback]}44`,
+          }}
+        >
+          {FEEDBACK_LABELS[feedback]}
         </div>
       )}
 
@@ -257,7 +269,7 @@ export function PracticeNoteLane({
             {microphoneStatus === 'requesting' || microphoneStatus === 'calibrating'
               ? `${microphoneMessage}${microphoneStatus === 'calibrating' ? ` ${calibrationProgress}%` : ''}`
               : isFallbackChart
-                ? '该曲目的专属谱面仍在制作，当前使用 C 调基础练习谱'
+                ? '该曲目的专属谱面仍在制作，当前使用 C 调基础练习谱。'
                 : micOn
                   ? '开始后将请求麦克风权限，用真实音高进行判定'
                   : '麦克风已关闭，本次练习将记录为未命中'}
