@@ -46,11 +46,11 @@ function CircleProgress({ value, color }: { value: number; color: string }) {
 }
 
 const JUDGMENT_LABEL: Record<string, { label: string; color: string }> = {
-  perfect: { label: '完美', color: '#A855F7' },
-  great:   { label: '太棒', color: '#22C55E' },
-  good:    { label: '不错', color: '#60A5FA' },
-  bad:     { label: '一般', color: '#FBCFE8' },
-  miss:    { label: '未命中', color: '#6B7280' },
+  perfect: { label: 'perfect', color: '#A855F7' },
+  great:   { label: 'great', color: '#22C55E' },
+  good:    { label: 'good', color: '#60A5FA' },
+  bad:     { label: 'bad', color: '#FBCFE8' },
+  miss:    { label: 'miss', color: '#6B7280' },
 };
 
 export function ResultsPage({ results, song, onBookmarkWeakMeasure, onRetry, onHome }: Props) {
