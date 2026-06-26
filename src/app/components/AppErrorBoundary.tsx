@@ -43,6 +43,7 @@ export class AppErrorBoundary extends Component<Props, State> {
           </p>
           <button
             type="button"
+            aria-label="尝试恢复页面"
             onClick={this.reset}
             style={{ marginTop: 16, width: '100%', height: 44, borderRadius: 12, border: 'none', background: 'linear-gradient(135deg,#00C9B1,#0099A0)', color: '#051015', fontWeight: 800, cursor: 'pointer' }}
           >

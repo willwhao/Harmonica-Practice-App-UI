@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
 import { AlertTriangle, BookmarkPlus, Share2, RotateCcw, Home, CheckCircle, PlayCircle } from 'lucide-react';
-import { motion } from 'motion/react';
 import type { GameResults, Song } from '../types';
 import { getWeakestMeasure, summarizeTimingAndStability } from '../../engine/practiceInsights';
+import { calculatePracticeXp } from '../growth/growthSystem';
 
 interface Props {
   results: GameResults;
@@ -58,10 +58,19 @@ export function ResultsPage({ results, song, onBookmarkWeakMeasure, onRetry, onH
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rank = getRank(results.score, results.accuracy);
   const totalHit = results.perfect + results.great + results.good;
-  const completionPct = Math.round((totalHit / results.total) * 100);
+  const completionPct = results.total > 0 ? Math.round((totalHit / results.total) * 100) : 0;
   const weakestMeasure = getWeakestMeasure(results.noteResults ?? []);
   const errorNotes = (results.noteResults ?? []).filter((item) => item.judgment === 'Bad' || item.judgment === 'Miss').slice(0, 8);
   const performanceDimensions = summarizeTimingAndStability(results.noteResults ?? []);
+  const earnedXp = calculatePracticeXp({
+    id: 'current-result',
+    songId: song.id,
+    score: results.score,
+    accuracy: results.accuracy,
+    practicedAt: new Date().toISOString(),
+    durationSeconds: results.durationSeconds,
+    weakMeasures: weakestMeasure ? [weakestMeasure] : [],
+  });
   const seekRecording = (startMs: number) => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -120,10 +129,7 @@ export function ResultsPage({ results, song, onBookmarkWeakMeasure, onRetry, onH
           </button>
         </div>
 
-        <motion.div
-          initial={{ scale: 0.5, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.5, ease: [0.34, 1.56, 0.64, 1] }}
+        <div
           style={{
             width: 80,
             height: 80,
@@ -138,23 +144,20 @@ export function ResultsPage({ results, song, onBookmarkWeakMeasure, onRetry, onH
           }}
         >
           <span style={{ fontSize: 42, fontWeight: 900, color: rank.color }}>{rank.label}</span>
-        </motion.div>
+        </div>
 
         <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: 13 }}>{song.title} · 演奏完成</div>
       </div>
 
       {/* Score */}
       <div style={{ textAlign: 'center', padding: '20px 0 10px', flexShrink: 0 }}>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
+        <div>
           <div style={{ color: '#6B80A8', fontSize: 12, marginBottom: 4 }}>最终得分</div>
           <div style={{ color: '#E2EAF8', fontSize: 42, fontWeight: 800, letterSpacing: '-1px' }}>
             {results.score.toLocaleString()}
           </div>
-        </motion.div>
+          <div style={{ display: 'inline-flex', marginTop: 8, padding: '5px 10px', borderRadius: 999, background: 'rgba(245,158,11,0.12)', color: '#FBCB75', fontSize: 11, fontWeight: 800 }}>+{earnedXp} XP</div>
+        </div>
       </div>
 
       {/* Stats row */}
@@ -190,12 +193,7 @@ export function ResultsPage({ results, song, onBookmarkWeakMeasure, onRetry, onH
               <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 36, fontSize: 11, color, fontWeight: 700, flexShrink: 0 }}>{label}</div>
                 <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${pct}%` }}
-                    transition={{ delay: 0.3 + ['perfect','great','good','bad','miss'].indexOf(k) * 0.05, duration: 0.5 }}
-                    style={{ height: '100%', background: color, borderRadius: 3, opacity: 0.85 }}
-                  />
+                  <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3, opacity: 0.85 }} />
                 </div>
                 <div style={{ width: 28, textAlign: 'right', color, fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{count}</div>
               </div>

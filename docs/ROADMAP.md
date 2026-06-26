@@ -47,11 +47,12 @@
 
 ### P1 — 短期（2~4 周）
 
-- [ ] 将纯逻辑抽到 `src/engine/` 或独立包：
-  - [ ] `pitchDetection.ts`
+- [x] 将主要纯逻辑抽到 `src/engine/` 或框架无关模块：
   - [x] `practiceWindow.ts` / `practiceInsights.ts`
   - [x] `practiceCharts.ts` 校验逻辑
   - [x] `practiceScoring.ts` / `recordingSegments.ts` / `scoreLayout.ts`
+  - [x] 成长体系、内容目录和运营开关逻辑保持纯函数/客户端封装
+  - [ ] `pitchDetection.ts` 仍保留在 Web 音频模块，后续可独立包化
 - [x] 音高检测迁移 **AudioWorklet** 或 Web Worker（减轻主线程压力）— 已选择 Web Worker 先行并接入最小原型，AudioWorklet 作为后续升级
 - [x] 补全谱面：10 首歌至少 8 首有独立编配
 - [x] 后端 SQLite → **PostgreSQL**（开发可用 Neon / Supabase）— 已完成生产迁移方案，运行时 Adapter 后续独立实施
@@ -74,7 +75,7 @@
 - [x] 原曲版权伴奏 + OSS + CDN（基础版：授权登记模型、CDN URL 生成与可用性门禁）
 - [x] 运营 CMS（曲库 / 谱面管理）（基础版：统一内容表、公开读取、登录写入、静态 fallback）
 - [x] 灰度发布 / 远程功能开关 / 运营报表（基础版：远程开关 API、稳定灰度桶、运营摘要 API）
-- [ ] 经验值 / 徽章 / 月报
+- [x] 经验值 / 徽章 / 月报（基础版：XP、等级、徽章、月报摘要，接入学习中心与结果页）
 
 ---
 
@@ -341,12 +342,12 @@ Month 2 — 核心体验
   4 首独立谱面 + 真机测试
 
 Month 3 — 产品化
-  口琴校准向导 + 学习中心完善
-  E2E + CI + 错误监控
+  口琴校准向导 + 新手引导 + 学习中心完善
+  E2E + CI + 错误监控 + 隐私/协议
 
-Month 4+ — 多端扩展
-  uni-app 小程序 / Capacitor App
-  内容 CMS + 合规文档
+Month 4+ — 运营与多端扩展
+  内容 CMS + 授权音频门禁 + 远程开关/运营摘要 + 成长体系基础版
+  uni-app 小程序 / Capacitor App 作为后续独立评估
 ```
 
 ---
@@ -356,6 +357,8 @@ Month 4+ — 多端扩展
 - [README.md](../README.md) — 功能状态与开发说明
 - [RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md) — 发布检查清单
 - [ROLLBACK_PLAN.md](./ROLLBACK_PLAN.md) — 回滚计划
+- [CONTENT_CMS_PLAN.md](./CONTENT_CMS_PLAN.md) — 运营 CMS 基础版方案
+- [LICENSED_AUDIO_DELIVERY_PLAN.md](./LICENSED_AUDIO_DELIVERY_PLAN.md) — 授权音频与 OSS/CDN 投放方案
 - [OPERATIONS_RELEASE_PLAN.md](./OPERATIONS_RELEASE_PLAN.md) — 灰度发布与运营报表基础版方案
 
 ---

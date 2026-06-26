@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { ArrowLeft, Award, BarChart3, Bookmark, BookOpen, CalendarDays, ChevronRight, Clock3, Flame, Target, TrendingUp } from 'lucide-react';
 import { LEARNING_TRACKS } from '../data/learningTracks';
 import { entryMinutes, getLearningSummary, getWeeklyActivity } from '../learning/learningStats';
+import { buildGrowthSummary } from '../growth/growthSystem';
 import type { AuthUser, LearningTrackProgress, PracticeBookmark, PracticeHistoryEntry, Song } from '../types';
 
 interface Props {
@@ -22,6 +23,8 @@ export function LearningPage({ user, songs, history, bookmarks, learningProgress
   const dailyGoal = user?.preferences.dailyGoalMinutes ?? 15;
   const dailyProgress = Math.min(100, Math.round(summary.todayMinutes / dailyGoal * 100));
   const maxWeekMinutes = Math.max(1, ...week.map((day) => day.minutes));
+  const growth = useMemo(() => buildGrowthSummary(history, bookmarks, learningProgress), [history, bookmarks, learningProgress]);
+  const earnedBadges = growth.badges.filter((badge) => badge.earned);
 
   const weakSong = useMemo(() => {
     const averages = songs.map((song) => {
@@ -60,6 +63,33 @@ export function LearningPage({ user, songs, history, bookmarks, learningProgress
             <Metric icon={<CalendarDays size={15} />} value={summary.sessions} label="累计练习" color="#60A5FA" />
             <Metric icon={<Target size={15} />} value={`${summary.averageAccuracy}%`} label="平均准确率" color="#00C9B1" />
             <Metric icon={<Award size={15} />} value={summary.bestScore.toLocaleString()} label="最高分" color="#F59E0B" />
+          </div>
+
+          <section style={{ marginTop: 12, borderRadius: 18, padding: 15, background: 'linear-gradient(135deg,rgba(168,85,247,0.14),rgba(245,158,11,0.06))', border: '1px solid rgba(168,85,247,0.18)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+              <div>
+                <div style={{ color: '#E2EAF8', fontSize: 14, fontWeight: 750 }}>成长等级 Lv.{growth.level.level}</div>
+                <div style={{ color: '#7D8FAE', fontSize: 10, marginTop: 3 }}>{growth.level.totalXp.toLocaleString()} XP · 本级 {growth.level.currentLevelXp}/{growth.level.nextLevelXp}</div>
+              </div>
+              <div style={{ color: '#F59E0B', fontSize: 12, fontWeight: 800 }}>{earnedBadges.length}/{growth.badges.length} 徽章</div>
+            </div>
+            <div style={{ height: 7, background: 'rgba(255,255,255,0.07)', borderRadius: 4, marginTop: 12, overflow: 'hidden' }}><div style={{ height: '100%', width: `${growth.level.progressPercent}%`, background: 'linear-gradient(90deg,#A855F7,#F59E0B)', borderRadius: 4 }} /></div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginTop: 12 }}>
+              <Metric icon={<Flame size={15} />} value={growth.monthlyReport.xp} label="本月 XP" color="#F59E0B" />
+              <Metric icon={<Clock3 size={15} />} value={growth.monthlyReport.minutes} label="本月分钟" color="#00C9B1" />
+              <Metric icon={<Award size={15} />} value={growth.monthlyReport.activeDays} label="活跃天数" color="#A855F7" />
+            </div>
+          </section>
+
+          <SectionTitle icon={<Award size={14} />} title="成长徽章" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 8 }}>
+            {growth.badges.slice(0, 4).map((badge) => (
+              <div key={badge.id} style={{ padding: 11, borderRadius: 13, background: badge.earned ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.035)', border: badge.earned ? '1px solid rgba(245,158,11,0.2)' : '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ color: badge.earned ? '#FBCB75' : '#7D8FAE', fontSize: 11, fontWeight: 750 }}>{badge.label}</div>
+                <div style={{ color: '#6B80A8', fontSize: 9, lineHeight: 1.45, marginTop: 4 }}>{badge.description}</div>
+                <div style={{ color: badge.earned ? '#F59E0B' : '#4A5A78', fontSize: 9, marginTop: 7 }}>{Math.min(badge.progress, badge.target)}/{badge.target} · {badge.earned ? '已获得' : '进行中'}</div>
+              </div>
+            ))}
           </div>
 
           <SectionTitle icon={<TrendingUp size={14} />} title="最近 7 天" />
