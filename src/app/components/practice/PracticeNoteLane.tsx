@@ -13,11 +13,11 @@ const FEEDBACK_COLORS: Record<NoteJudgment, string> = {
 };
 
 const FEEDBACK_LABELS: Record<NoteJudgment, string> = {
-  Perfect: 'Perfect',
-  Great: 'Great',
-  Good: 'Good',
-  Bad: 'Bad',
-  Miss: 'Miss',
+  Perfect: '完美！',
+  Great: '太棒！',
+  Good: '不错',
+  Bad: '一般',
+  Miss: '未命中',
 };
 
 function formatDurationBeats(durationBeats: number) {

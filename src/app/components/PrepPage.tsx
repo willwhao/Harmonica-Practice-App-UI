@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Music2, Play, Headphones, Volume2, TimerReset, UploadCloud, Sliders } from 'lucide-react';
 import type { PracticeSettings, Song } from '../types';
 import { getPracticeChart, type PracticeChart } from '../data/practiceCharts';
@@ -11,6 +11,7 @@ import { formatPitchOffset, type PersonalPitchProfile } from '../practice/pitchP
 
 interface Props {
   song: Song;
+  practiceChart?: PracticeChart;
   pitchProfile?: PersonalPitchProfile | null;
   onBack: () => void;
   onStart: (settings: PracticeSettings, importedChart?: PracticeChart) => void;
@@ -39,6 +40,10 @@ const AUDIO_STATUS_COLOR: Record<PracticeAudioAssetStatus, string> = {
   'license-expired': '#EF4444',
   'cdn-missing': '#60A5FA',
 };
+
+function getChartMeasureCount(chart: PracticeChart) {
+  return chart.notation?.lines.reduce((count, line) => count + line.measures.length, 0) ?? chart.measures.length;
+}
 
 function OptionGroup<T extends string>({
   label,
@@ -120,8 +125,9 @@ function RangeSlider({
   );
 }
 
-export function PrepPage({ song, pitchProfile, onBack, onStart, onCalibrate }: Props) {
-  const measureCount = getPracticeChart(song.id).chart.measures.length;
+export function PrepPage({ song, practiceChart, pitchProfile, onBack, onStart, onCalibrate }: Props) {
+  const basePracticeChart = practiceChart ?? getPracticeChart(song.id).chart;
+  const measureCount = getChartMeasureCount(basePracticeChart);
   const audioAssets = getPracticeAudioAssets(song);
   const releaseConfig = buildReleaseConfig();
   const audioUploadEnabled = isFeatureEnabled(releaseConfig, 'audioUploadTranscription');
@@ -140,6 +146,12 @@ export function PrepPage({ song, pitchProfile, onBack, onStart, onCalibrate }: P
   const [transcription, setTranscription] = useState<AudioTranscription | null>(null);
   const [transcriptionStatus, setTranscriptionStatus] = useState('');
   const [audioPrivacyAccepted, setAudioPrivacyAccepted] = useState(false);
+  useEffect(() => {
+    setHarpType(song.harmonicaType);
+    setCustomStartMeasure(0);
+    setCustomEndMeasure(measureCount);
+    setPracticeRange('full');
+  }, [measureCount, song.harmonicaType, song.id]);
   const importedChart = useMemo(() => transcription ? createPracticeChartFromTranscription({
     song,
     transcription,

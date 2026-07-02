@@ -17,11 +17,17 @@ type LegacyPracticeChart = Omit<PracticeChart, 'schemaVersion' | 'source' | 'not
 
 export function validatePracticeChart(chart: PracticeChart): ChartValidationResult {
   const issues: string[] = [];
+  const measureBeats = chart.measureBeats ?? 4;
+  const notationMeasureCount = chart.notation?.lines.reduce((count, line) => count + line.measures.length, 0);
+  const effectiveMeasureCount = notationMeasureCount && notationMeasureCount > 0 ? notationMeasureCount : chart.measures.length;
   if (chart.schemaVersion !== 2) issues.push('schemaVersion 必须为 2');
   if (!chart.id || !chart.songId || !chart.title) issues.push('id、songId 和 title 不能为空');
   if (!Number.isInteger(chart.version) || chart.version < 1) issues.push('version 必须为正整数');
-  if (chart.measures.length === 0 || chart.measures.some((measure) => measure.length !== 4)) issues.push('每个谱面必须包含四拍小节');
-  if (chart.totalBeats !== chart.measures.length * 4) issues.push('totalBeats 与小节数量不一致');
+  if (!Number.isFinite(measureBeats) || measureBeats <= 0) issues.push('measureBeats 必须为正数');
+  if (chart.measures.length === 0 || chart.measures.some((measure) => measure.length === 0)) issues.push('每个谱面必须包含非空小节');
+  if (!chart.notation && chart.measures.some((measure) => measure.length !== measureBeats)) issues.push('每个谱面必须包含固定拍数小节');
+  const expectedTotalBeats = effectiveMeasureCount * measureBeats;
+  if (Math.abs(chart.totalBeats - expectedTotalBeats) > 0.001) issues.push('totalBeats 与小节数量不一致');
   let previousBeat = -1;
   chart.notes.forEach((note, index) => {
     if (note.beat < 0 || note.beat >= chart.totalBeats) issues.push(`音符 ${index} 的 beat 越界`);

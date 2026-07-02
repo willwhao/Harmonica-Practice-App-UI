@@ -14,6 +14,7 @@ import { LegalPage } from './components/LegalPage';
 import { SONGS } from './data';
 import type { AuthUser, GameResults, LearningTrackProgress, PracticeBookmark, PracticeHistoryEntry, PracticeSettings, Song } from './types';
 import type { PracticeChart } from './data/practiceCharts';
+import { findChartForSong, loadPracticeSongPack, mergeSongs } from './content/songPack';
 import { deleteLocalAccount, getLocalUserExport, loadSessionUser, logoutLocalAccount, updateLocalUser } from './auth/authStore';
 import { summarizeWeakMeasures } from './practice/practiceInsights';
 import { loadPitchProfile } from './practice/pitchProfile';
@@ -79,8 +80,8 @@ function saveBookmarks(bookmarks: PracticeBookmark[], userId?: string) {
   window.localStorage.setItem(bookmarksKey(userId), JSON.stringify(bookmarks));
 }
 
-function getSongById(songId?: string) {
-  return SONGS.find((item) => item.id === songId) ?? SONGS[0];
+function getSongById(songs: Song[], songId?: string) {
+  return songs.find((item) => item.id === songId) ?? songs[0] ?? SONGS[0];
 }
 
 /* Phone status bar */
@@ -127,6 +128,8 @@ function AppRoutes() {
   const navigate = useNavigate();
   const [user, setUser] = useState<AuthUser | null>(() => isCloudMode() ? null : loadSessionUser());
   const [guestMode, setGuestMode] = useState(() => window.localStorage.getItem(GUEST_MODE_KEY) === 'true');
+  const [catalogSongs, setCatalogSongs] = useState<Song[]>(SONGS);
+  const [catalogCharts, setCatalogCharts] = useState<PracticeChart[]>([]);
   const [selectedSong, setSelectedSong] = useState<Song>(SONGS[0]);
   const [results, setResults] = useState<GameResults | null>(null);
   const [settings, setSettings] = useState<PracticeSettings>(DEFAULT_SETTINGS);
@@ -136,6 +139,23 @@ function AppRoutes() {
   const [learningProgress, setLearningProgress] = useState<LearningTrackProgress[]>(() => getLearningTrackProgress(loadHistory(isCloudMode() ? undefined : loadSessionUser()?.id)));
   const [pitchProfile, setPitchProfile] = useState(() => loadPitchProfile(isCloudMode() ? undefined : loadSessionUser()?.id));
   const [onboardingCompleted, setOnboardingCompleted] = useState(() => hasCompletedOnboarding(isCloudMode() ? undefined : loadSessionUser()?.id));
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadPracticeSongPack().then((pack) => {
+      if (cancelled) return;
+      setCatalogSongs(mergeSongs(SONGS, pack.songs));
+      setCatalogCharts(pack.charts);
+    }).catch(() => {
+      if (!cancelled) {
+        setCatalogSongs(SONGS);
+        setCatalogCharts([]);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const syncLearningState = (nextBookmarks: PracticeBookmark[], nextHistory: PracticeHistoryEntry[], activeUser = user) => {
     const nextProgress = getLearningTrackProgress(nextHistory);
@@ -326,7 +346,7 @@ function AppRoutes() {
   };
 
   const practiceBookmark = (bookmark: PracticeBookmark) => {
-    const song = SONGS.find((item) => item.id === bookmark.songId);
+    const song = catalogSongs.find((item) => item.id === bookmark.songId);
     if (!song) return;
     setSelectedSong(song);
     setSettings((current) => ({ ...current, speed: 80, practiceRange: 'custom', customStartMeasure: bookmark.startMeasure, customEndMeasure: bookmark.endMeasure, repeatCount: 3, metronomeEnabled: true }));
@@ -364,7 +384,7 @@ function AppRoutes() {
                 path="/"
                 element={(
                   <HomePage
-                    songs={SONGS}
+                    songs={catalogSongs}
                     history={history}
                     user={user}
                     onAccount={() => navigate('/account')}
@@ -378,6 +398,8 @@ function AppRoutes() {
                 path="/prep/:songId"
                 element={(
                   <PrepRoute
+                    songs={catalogSongs}
+                    charts={catalogCharts}
                     onBack={() => navigate('/')}
                     pitchProfile={pitchProfile}
                     onCalibrate={() => navigate('/calibration')}
@@ -397,6 +419,7 @@ function AppRoutes() {
                     song={selectedSong}
                     settings={settings}
                     importedChart={importedChart ?? undefined}
+                    catalogChart={findChartForSong(catalogCharts, selectedSong.id) ?? undefined}
                     pitchProfile={pitchProfile}
                     onBack={() => navigate(`/prep/${selectedSong.id}`)}
                     onFinish={finishPractice}
@@ -464,7 +487,7 @@ function AppRoutes() {
                 element={(
                   <LearningPage
                     user={user}
-                    songs={SONGS}
+                    songs={catalogSongs}
                     history={history}
                     bookmarks={bookmarks}
                     learningProgress={learningProgress}
@@ -492,12 +515,16 @@ function LegalRoute({ onBack }: { onBack: () => void }) {
 }
 
 function PrepRoute({
+  songs,
+  charts,
   onBack,
   pitchProfile,
   onCalibrate,
   onSelectedSongChange,
   onStart,
 }: {
+  songs: Song[];
+  charts: PracticeChart[];
   onBack: () => void;
   pitchProfile: ReturnType<typeof loadPitchProfile>;
   onCalibrate: () => void;
@@ -505,11 +532,12 @@ function PrepRoute({
   onStart: (settings: PracticeSettings, importedChart?: PracticeChart) => void;
 }) {
   const { songId } = useParams();
-  const song = getSongById(songId);
+  const song = getSongById(songs, songId);
+  const practiceChart = findChartForSong(charts, song.id) ?? undefined;
 
   useEffect(() => {
     onSelectedSongChange(song);
   }, [onSelectedSongChange, song]);
 
-  return <PrepPage song={song} pitchProfile={pitchProfile} onBack={onBack} onStart={onStart} onCalibrate={onCalibrate} />;
+  return <PrepPage song={song} practiceChart={practiceChart} pitchProfile={pitchProfile} onBack={onBack} onStart={onStart} onCalibrate={onCalibrate} />;
 }

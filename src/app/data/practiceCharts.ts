@@ -15,6 +15,43 @@ export interface PracticeNote {
   lyric?: string;
 }
 
+export type ScoreNotationTokenKind = 'note' | 'rest' | 'hold' | 'section';
+export type ScoreNotationOctave = 'high' | 'low';
+
+export interface ScoreNotationToken {
+  id: string;
+  kind: ScoreNotationTokenKind;
+  text: string;
+  note?: string;
+  lyric?: string;
+  startBeat?: number;
+  durationBeats?: number;
+  underline?: 0 | 1 | 2;
+  octave?: ScoreNotationOctave;
+  suffix?: string;
+  slur?: boolean;
+}
+
+export interface ScoreNotationMeasure {
+  id: string;
+  section?: string;
+  startBeat: number;
+  endBeat: number;
+  tokens: ScoreNotationToken[];
+}
+
+export interface ScoreNotationLine {
+  id: string;
+  startBeat: number;
+  endBeat: number;
+  measures: ScoreNotationMeasure[];
+}
+
+export interface ScoreNotation {
+  beatsPerMeasure: number;
+  lines: ScoreNotationLine[];
+}
+
 export interface ScoreBeat {
   n: string;
   t: BreathDirection | 'rest';
@@ -34,10 +71,12 @@ export interface PracticeChart {
   source: 'practice-arrangement';
   totalBeats: number;
   lookAheadBeats: number;
+  measureBeats?: number;
   noteFrequencies: Record<string, number>;
   noteNames: Record<string, string>;
   notes: PracticeNote[];
   measures: ScoreBeat[][];
+  notation?: ScoreNotation;
 }
 
 export interface ChartValidationResult {

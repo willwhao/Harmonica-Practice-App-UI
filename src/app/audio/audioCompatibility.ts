@@ -20,10 +20,11 @@ export function inspectAudioCompatibility(source: AudioCapabilitySource): AudioC
 }
 
 export function inspectCurrentBrowserAudio(): AudioCompatibilityResult {
+  const browserWindow = window as typeof window & { webkitAudioContext?: typeof AudioContext };
   return inspectAudioCompatibility({
     isSecureContext: window.isSecureContext,
     hasMediaDevices: Boolean(navigator.mediaDevices?.getUserMedia),
-    hasAudioContext: Boolean(window.AudioContext),
+    hasAudioContext: Boolean(window.AudioContext ?? browserWindow.webkitAudioContext),
     hasAnimationFrame: typeof window.requestAnimationFrame === 'function',
   });
 }

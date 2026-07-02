@@ -21,7 +21,7 @@ export function getVisibleTraditionalScore(
   beatsPerLine = 8,
 ): [VisibleScoreBeat[], VisibleScoreBeat[]] {
   const currentMeasure = Math.max(0, Math.floor(currentBeat / 4));
-  const startMeasure = Math.max(0, Math.min(Math.max(0, measures.length - 4), currentMeasure - 1));
+  const startMeasure = currentMeasure;
   const startBeat = startMeasure * 4;
   const beats = Array.from({ length: beatsPerLine * 2 }, (_, index) => {
     const absoluteBeat = startBeat + index;

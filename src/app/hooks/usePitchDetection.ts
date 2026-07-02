@@ -19,6 +19,8 @@ export type MicrophoneStatus =
   | 'unsupported'
   | 'error';
 
+const DEFAULT_MINIMUM_RMS = 0.006;
+const MAX_DYNAMIC_GATE_RMS = 0.035;
 const delay = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
 function calculateStability(frequencies: number[]) {
@@ -26,6 +28,28 @@ function calculateStability(frequencies: number[]) {
   const average = frequencies.reduce((total, value) => total + value, 0) / frequencies.length;
   const cents = frequencies.map((frequency) => 1200 * Math.log2(frequency / average));
   return Math.round(Math.sqrt(cents.reduce((total, value) => total + value * value, 0) / cents.length));
+}
+
+function getAudioContextClass() {
+  const browserWindow = window as typeof window & { webkitAudioContext?: typeof AudioContext };
+  return window.AudioContext ?? browserWindow.webkitAudioContext;
+}
+
+async function requestMicrophoneStream() {
+  const preferredConstraints: MediaStreamConstraints = {
+    audio: {
+      echoCancellation: { ideal: false },
+      noiseSuppression: { ideal: false },
+      autoGainControl: { ideal: false },
+      channelCount: { ideal: 1 },
+    },
+  };
+  try {
+    return await navigator.mediaDevices.getUserMedia(preferredConstraints);
+  } catch (error) {
+    if (error instanceof DOMException && error.name !== 'OverconstrainedError') throw error;
+    return navigator.mediaDevices.getUserMedia({ audio: true });
+  }
 }
 
 export function usePitchDetection() {
@@ -41,7 +65,7 @@ export function usePitchDetection() {
   const frameRef = useRef<number | undefined>(undefined);
   const lastAnalysisRef = useRef(0);
   const startingRef = useRef(false);
-  const minimumRmsRef = useRef(0.012);
+  const minimumRmsRef = useRef(DEFAULT_MINIMUM_RMS);
   const previousSampleRef = useRef<LivePitchSample | null>(null);
   const previousLevelRef = useRef(0);
   const frequencyWindowRef = useRef<number[]>([]);
@@ -62,6 +86,7 @@ export function usePitchDetection() {
     contextRef.current = null;
     if (context && context.state !== 'closed') void context.close();
     previousSampleRef.current = null;
+    previousLevelRef.current = 0;
     frequencyWindowRef.current = [];
     setSample(null);
     setInputLevel(0);
@@ -86,14 +111,11 @@ export function usePitchDetection() {
     startingRef.current = true;
     let pendingStream: MediaStream | null = null;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
-      });
-      pendingStream = stream;
-      const AudioContextClass = window.AudioContext
-        ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      const nextStream = await requestMicrophoneStream();
+      pendingStream = nextStream;
+      const AudioContextClass = getAudioContextClass();
       if (!AudioContextClass) {
-        stream.getTracks().forEach((track) => track.stop());
+        nextStream.getTracks().forEach((track) => track.stop());
         setStatus('unsupported');
         setMessage('当前浏览器不支持音频分析');
         return null;
@@ -101,41 +123,43 @@ export function usePitchDetection() {
 
       const context = new AudioContextClass();
       await context.resume();
-      const source = context.createMediaStreamSource(stream);
+      const source = context.createMediaStreamSource(nextStream);
       const analyser = context.createAnalyser();
-      analyser.fftSize = 2048;
+      analyser.fftSize = 4096;
       analyser.smoothingTimeConstant = 0;
       source.connect(analyser);
       const buffer = new Float32Array(analyser.fftSize);
-      let worker: Worker | null = null;
 
-      streamRef.current = stream;
-      setStream(stream);
+      streamRef.current = nextStream;
+      setStream(nextStream);
       pendingStream = null;
       contextRef.current = context;
       setStatus('calibrating');
-      setMessage('环境校准中，请保持安静…');
+      setMessage('环境校准中，请先保持安静…');
       setCalibrationProgress(0);
+
       const noiseSamples: number[] = [];
-      for (let index = 0; index < 20; index += 1) {
+      for (let index = 0; index < 16; index += 1) {
         analyser.getFloatTimeDomainData(buffer);
         const level = measureRms(buffer);
         noiseSamples.push(level);
-        setInputLevel(Math.round(Math.min(1, level * 8) * 100));
-        setCalibrationProgress(Math.round((index + 1) / 20 * 100));
+        setInputLevel(Math.round(Math.min(1, level * 10) * 100));
+        setCalibrationProgress(Math.round((index + 1) / 16 * 100));
         await delay(50);
       }
       const sortedNoise = [...noiseSamples].sort((a, b) => a - b);
       const measuredFloor = sortedNoise[Math.floor(sortedNoise.length * 0.75)] ?? 0;
-      minimumRmsRef.current = Math.max(0.012, measuredFloor * 2.5);
-      setNoiseFloor(Math.round(Math.min(1, measuredFloor * 8) * 100));
+      minimumRmsRef.current = Math.min(MAX_DYNAMIC_GATE_RMS, Math.max(DEFAULT_MINIMUM_RMS, measuredFloor * 1.8));
+      setNoiseFloor(Math.round(Math.min(1, measuredFloor * 10) * 100));
       setStatus('listening');
-      setMessage('校准完成，等待吹奏');
+      setMessage('校准完成，等待口琴声音');
 
       const applyDetectedSample = (detected: PitchSample | null, rms: number) => {
         if (detected) {
           const previous = previousSampleRef.current;
-          const onset = !previous || previous.note !== detected.note || rms > previousLevelRef.current * 1.35;
+          const onset = !previous
+            || previous.note !== detected.note
+            || rms > Math.max(previousLevelRef.current * 1.35, minimumRmsRef.current * 1.25);
           if (!previous || previous.note !== detected.note) frequencyWindowRef.current = [];
           frequencyWindowRef.current = [...frequencyWindowRef.current.slice(-7), detected.frequency];
           const nextSample: LivePitchSample = {
@@ -151,20 +175,20 @@ export function usePitchDetection() {
           previousSampleRef.current = null;
           frequencyWindowRef.current = [];
           setSample(null);
-          setMessage(rms <= minimumRmsRef.current ? '等待口琴声音' : '输入不稳定，请靠近麦克风');
+          setMessage(rms <= minimumRmsRef.current ? '等待口琴声音' : '输入不稳定，请靠近麦克风并吹单音');
         }
         previousLevelRef.current = rms;
       };
 
       if (typeof Worker !== 'undefined') {
-        worker = new Worker(new URL('../audio/pitchDetection.worker.ts', import.meta.url), { type: 'module' });
+        const worker = new Worker(new URL('../audio/pitchDetection.worker.ts', import.meta.url), { type: 'module' });
         worker.onmessage = (event: MessageEvent<PitchWorkerResponse & { rms?: number }>) => {
           workerBusyRef.current = false;
           if (!contextRef.current) return;
           applyDetectedSample(event.data.sample, event.data.rms ?? previousLevelRef.current);
         };
         worker.onerror = () => {
-          worker?.terminate();
+          worker.terminate();
           workerRef.current = null;
           workerBusyRef.current = false;
           setMessage('Worker 不可用，已回退到主线程识别');
@@ -176,8 +200,7 @@ export function usePitchDetection() {
         if (time - lastAnalysisRef.current >= 50) {
           analyser.getFloatTimeDomainData(buffer);
           const rms = measureRms(buffer);
-          const level = Math.round(Math.min(1, rms * 8) * 100);
-          setInputLevel(level);
+          setInputLevel(Math.round(Math.min(1, rms * 10) * 100));
 
           if (workerRef.current && !workerBusyRef.current) {
             workerBusyRef.current = true;
@@ -199,7 +222,7 @@ export function usePitchDetection() {
         frameRef.current = requestAnimationFrame(analyse);
       };
       frameRef.current = requestAnimationFrame(analyse);
-      return stream;
+      return nextStream;
     } catch (error) {
       pendingStream?.getTracks().forEach((track) => track.stop());
       setSample(null);

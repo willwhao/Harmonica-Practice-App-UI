@@ -30,11 +30,19 @@ export function measureRms(buffer: Float32Array) {
 }
 
 export function detectPitch(buffer: Float32Array, sampleRate: number, minimumRms = 0.012): PitchSample | null {
-  const rms = measureRms(buffer);
+  const average = buffer.reduce((total, value) => total + value, 0) / buffer.length;
+  const centered = new Float32Array(buffer.length);
+  let sumSquares = 0;
+  for (let index = 0; index < buffer.length; index += 1) {
+    const value = buffer[index] - average;
+    centered[index] = value;
+    sumSquares += value * value;
+  }
+  const rms = Math.sqrt(sumSquares / buffer.length);
   if (rms < minimumRms) return null;
 
-  const minLag = Math.max(2, Math.floor(sampleRate / 1600));
-  const maxLag = Math.min(buffer.length - 2, Math.floor(sampleRate / 80));
+  const minLag = Math.max(2, Math.floor(sampleRate / 1800));
+  const maxLag = Math.min(buffer.length - 2, Math.floor(sampleRate / 70));
   const correlations = new Float32Array(maxLag + 1);
   let bestLag = -1;
   let bestCorrelation = 0;
@@ -43,10 +51,10 @@ export function detectPitch(buffer: Float32Array, sampleRate: number, minimumRms
     let correlation = 0;
     let energyA = 0;
     let energyB = 0;
-    const length = buffer.length - lag;
+    const length = centered.length - lag;
     for (let i = 0; i < length; i += 1) {
-      const a = buffer[i];
-      const b = buffer[i + lag];
+      const a = centered[i];
+      const b = centered[i + lag];
       correlation += a * b;
       energyA += a * a;
       energyB += b * b;
@@ -59,9 +67,9 @@ export function detectPitch(buffer: Float32Array, sampleRate: number, minimumRms
     }
   }
 
-  if (bestLag < 0 || bestCorrelation < 0.62) return null;
+  if (bestLag < 0 || bestCorrelation < 0.52) return null;
 
-  const peakThreshold = Math.max(0.62, bestCorrelation * 0.9);
+  const peakThreshold = Math.max(0.5, bestCorrelation * 0.88);
   for (let lag = minLag + 1; lag < maxLag; lag += 1) {
     const current = correlations[lag];
     if (
@@ -81,7 +89,7 @@ export function detectPitch(buffer: Float32Array, sampleRate: number, minimumRms
   const offset = denominator === 0 ? 0 : 0.5 * (left - right) / denominator;
   const refinedLag = bestLag + Math.max(-1, Math.min(1, offset));
   const frequency = sampleRate / refinedLag;
-  if (!Number.isFinite(frequency) || frequency < 80 || frequency > 1600) return null;
+  if (!Number.isFinite(frequency) || frequency < 70 || frequency > 1800) return null;
 
   const note = frequencyToNote(frequency);
   return {

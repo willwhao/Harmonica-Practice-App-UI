@@ -10,13 +10,13 @@ test('maps harmonica holes to deterministic lane indexes', () => {
   assert.equal(getNoteTrackIndex({ hole: 12 }), 11);
 });
 
-test('builds a two-line traditional score window around the current measure', () => {
+test('builds a two-line traditional score window from the current measure', () => {
   const { chart } = getPracticeChart('1');
   const [lineA, lineB] = getVisibleTraditionalScore(chart.measures, 18.2);
   assert.equal(lineA.length, 8);
   assert.equal(lineB.length, 8);
-  assert.equal(lineA[0].measure, 3);
-  assert.equal(lineB[0].measure, 5);
+  assert.equal(lineA[0].measure, 4);
+  assert.equal(lineB[0].measure, 6);
   assert.ok([...lineA, ...lineB].some((item) => item.absoluteBeat === 18));
 });
 

@@ -25,6 +25,7 @@ interface Props {
   song: Song;
   settings: PracticeSettings;
   importedChart?: PracticeChart;
+  catalogChart?: PracticeChart;
   pitchProfile?: PersonalPitchProfile | null;
   onBack: () => void;
   onFinish: (results: GameResults) => void;
@@ -43,19 +44,21 @@ function judgePitch(sample: PitchSample | null, targetFrequency: number, pitchPr
 }
 
 /* ───── Main Component ───── */
-export function PracticePage({ song, settings, importedChart, pitchProfile, onBack, onFinish }: Props) {
+export function PracticePage({ song, settings, importedChart, catalogChart, pitchProfile, onBack, onFinish }: Props) {
   const builtInChart = getPracticeChart(song.id);
-  const chart = importedChart ?? builtInChart.chart;
-  const isFallbackChart = importedChart ? false : builtInChart.isFallback;
+  const chart = importedChart ?? catalogChart ?? builtInChart.chart;
+  const isFallbackChart = importedChart || catalogChart ? false : builtInChart.isFallback;
   const songNotes = chart.notes;
   const scoreMeasures = chart.measures;
   const noteFrequencies = chart.noteFrequencies;
   const noteNames = chart.noteNames;
   const lookAheadBeats = chart.lookAheadBeats;
+  const measureBeats = chart.measureBeats ?? 4;
+  const chartMeasureCount = chart.notation?.lines.reduce((count, line) => count + line.measures.length, 0) ?? scoreMeasures.length;
   const displayHarmonicaType = settings.harmonicaType;
   const practiceWindow = useMemo(
-    () => getPracticeWindow(scoreMeasures.length, settings.practiceRange, settings.repeatCount, settings.customStartMeasure, settings.customEndMeasure),
-    [scoreMeasures.length, settings.customEndMeasure, settings.customStartMeasure, settings.practiceRange, settings.repeatCount],
+    () => getPracticeWindow(chartMeasureCount, settings.practiceRange, settings.repeatCount, settings.customStartMeasure, settings.customEndMeasure, measureBeats),
+    [chartMeasureCount, measureBeats, settings.customEndMeasure, settings.customStartMeasure, settings.practiceRange, settings.repeatCount],
   );
   const practiceNotes = useMemo(
     () => songNotes.filter((note) => note.beat >= practiceWindow.startBeat && note.beat < practiceWindow.endBeat),
@@ -178,7 +181,7 @@ export function PracticePage({ song, settings, importedChart, pitchProfile, onBa
       const currentBeatInt = Math.floor(currentBeat);
 
       if (currentBeatInt !== lastMetronomeBeatRef.current) {
-        if (metronomeOn) tickMetronome(currentBeatInt % 4 === 0);
+        if (metronomeOn) tickMetronome(currentBeatInt % measureBeats === 0);
         if (accompanimentOn) playAccompanimentBeat(currentBeatInt, beatDurationSec, settings.accompaniment);
         lastMetronomeBeatRef.current = currentBeatInt;
       }
@@ -186,17 +189,20 @@ export function PracticePage({ song, settings, importedChart, pitchProfile, onBa
       // Auto-score notes
       practiceNotes.forEach((note) => {
         const scoreKey = `${playbackPosition.loopIndex}:${note.beat}:${note.track}`;
-        if (note.beat <= currentBeat && !scoredRef.current.has(scoreKey)) {
+        const judgeOffsetBeats = Math.min(note.durationBeats * 0.5, 0.5);
+        const judgeBeat = note.beat + judgeOffsetBeats;
+        if (judgeBeat <= currentBeat && !scoredRef.current.has(scoreKey)) {
           scoredRef.current.add(scoreKey);
           const targetFrequency = noteFrequencies[note.number] ?? 0;
           const detectedSample = micOn ? pitchSampleRef.current : null;
           const pitchJudgment = micOn ? judgePitch(detectedSample, targetFrequency, pitchProfile) : 'Miss';
-          const scheduledPlaybackBeat = playbackPosition.loopIndex * practiceWindow.segmentBeats + (note.beat - practiceWindow.startBeat);
+          const scheduledPlaybackBeat = playbackPosition.loopIndex * practiceWindow.segmentBeats + (judgeBeat - practiceWindow.startBeat);
           const scheduledTime = startRef.current + scheduledPlaybackBeat * beatDurationSec * 1000;
           const onsetSample = micOn ? lastOnsetSampleRef.current : null;
+          const onsetWindowMs = Math.max(180, beatDurationSec * Math.max(0.5, note.durationBeats * 0.65) * 1000);
           const onsetMatchesNote = Boolean(
             onsetSample
-            && Math.abs(onsetSample.capturedAt - scheduledTime) <= beatDurationSec * 1000
+            && Math.abs(onsetSample.capturedAt - scheduledTime) <= onsetWindowMs
             && targetFrequency
             && Math.abs(calibratedCentsFromTarget(onsetSample.frequency, targetFrequency, pitchProfile)) <= 80,
           );
@@ -208,7 +214,7 @@ export function PracticePage({ song, settings, importedChart, pitchProfile, onBa
           recordJudgment({
             loopIndex: playbackPosition.loopIndex,
             beat: note.beat,
-            measure: Math.floor(note.beat / 4) + 1,
+            measure: Math.floor(note.beat / measureBeats) + 1,
             noteNumber: note.number,
             hole: note.hole,
             breath: note.type,
@@ -262,7 +268,7 @@ export function PracticePage({ song, settings, importedChart, pitchProfile, onBa
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [accompanimentOn, isPlaying, advanceSession, beatDurationSec, metronomeOn, micOn, noteFrequencies, onFinish, pauseSession, pitchProfile, playAccompanimentBeat, practiceNotes, practiceWindow, recordJudgment, settings.accompaniment, stopRecording, tickMetronome]);
+  }, [accompanimentOn, isPlaying, advanceSession, beatDurationSec, measureBeats, metronomeOn, micOn, noteFrequencies, onFinish, pauseSession, pitchProfile, playAccompanimentBeat, practiceNotes, practiceWindow, recordJudgment, settings.accompaniment, stopRecording, tickMetronome]);
 
   // Derived display values
   const {
@@ -341,6 +347,7 @@ export function PracticePage({ song, settings, importedChart, pitchProfile, onBa
 
       <TraditionalScorePanel
         scoreMeasures={scoreMeasures}
+        notation={chart.notation}
         currentBeatFloat={currentBeatFloat}
         isPlaying={isPlaying}
         combo={combo}
